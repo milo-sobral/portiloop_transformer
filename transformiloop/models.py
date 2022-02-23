@@ -2,9 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math, copy, time
+import math, copy
 from torch.autograd import Variable
-import matplotlib.pyplot as plt
 
 
 class EncoderDecoder(nn.Module):
