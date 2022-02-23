@@ -12,13 +12,12 @@ class EncoderDecoder(nn.Module):
     A standard Encoder-Decoder architecture. Base for this and many 
     other models.
     """
-    def __init__(self, encoder, decoder, src_embed, tgt_embed, generator):
+    def __init__(self, encoder, decoder, src_encode, tgt_encode):
         super(EncoderDecoder, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
-        self.src_embed = src_embed
-        self.tgt_embed = tgt_embed
-        self.generator = generator
+        self.src_encode = src_encode
+        self.tgt_encode = tgt_encode
         
     def forward(self, src, tgt, src_mask, tgt_mask):
         "Take in and process masked src and target sequences."
@@ -26,19 +25,11 @@ class EncoderDecoder(nn.Module):
                             tgt, tgt_mask)
     
     def encode(self, src, src_mask):
-        return self.encoder(self.src_embed(src), src_mask)
+        return self.encoder(self.src_encode(src), src_mask)
     
     def decode(self, memory, src_mask, tgt, tgt_mask):
-        return self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask)
+        return self.decoder(self.tgt_encode(tgt), memory, src_mask, tgt_mask)
 
-class Generator(nn.Module):
-    "Define standard linear + softmax generation step."
-    def __init__(self, d_model, vocab):
-        super(Generator, self).__init__()
-        self.proj = nn.Linear(d_model, vocab)
-
-    def forward(self, x):
-        return F.log_softmax(self.proj(x), dim=-1)
 
 def clones(module, N):
     "Produce N identical layers."
@@ -58,8 +49,13 @@ class Encoder(nn.Module):
             x = layer(x, mask)
         return self.norm(x)
 
+
 class LayerNorm(nn.Module):
-    "Construct a layernorm module (See citation for details)."
+    """
+    Construct a layernorm module.
+    This is used to normalize all the weights of individual layers.
+    for details, see https://arxiv.org/abs/1607.06450
+    """
     def __init__(self, features, eps=1e-6):
         super(LayerNorm, self).__init__()
         self.a_2 = nn.Parameter(torch.ones(features))
@@ -70,6 +66,7 @@ class LayerNorm(nn.Module):
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
         return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
+
 
 class SublayerConnection(nn.Module):
     """
@@ -85,19 +82,24 @@ class SublayerConnection(nn.Module):
         "Apply residual connection to any sublayer with the same size."
         return x + self.dropout(sublayer(self.norm(x)))
 
+
 class EncoderLayer(nn.Module):
     "Encoder is made up of self-attn and feed forward (defined below)"
     def __init__(self, size, self_attn, feed_forward, dropout):
         super(EncoderLayer, self).__init__()
         self.self_attn = self_attn
         self.feed_forward = feed_forward
+        # Creates two clones of a Sublayer connection
         self.sublayer = clones(SublayerConnection(size, dropout), 2)
         self.size = size
 
     def forward(self, x, mask):
         "Follow Figure 1 (left) for connections."
+        # First sublayer connection is used to apply the self attention
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
+        # Second sublayer is used to apply the feedforward
         return self.sublayer[1](x, self.feed_forward)
+
 
 class Decoder(nn.Module):
     "Generic N layer decoder with masking."
@@ -110,6 +112,7 @@ class Decoder(nn.Module):
         for layer in self.layers:
             x = layer(x, memory, src_mask, tgt_mask)
         return self.norm(x)
+
 
 class DecoderLayer(nn.Module):
     "Decoder is made of self-attn, src-attn, and feed forward (defined below)"
@@ -124,30 +127,55 @@ class DecoderLayer(nn.Module):
     def forward(self, x, memory, src_mask, tgt_mask):
         "Follow Figure 1 (right) for connections."
         m = memory
+        # Apply self attention on the output with mask tgt_mask
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, tgt_mask))
+        # Apply attention with query->x and key and values from memory with mask src_mask
         x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, src_mask))
+        # Apply feed forward
         return self.sublayer[2](x, self.feed_forward)
 
+
 def subsequent_mask(size):
-    "Mask out subsequent positions."
+    """
+    Mask out subsequent positions.
+    Ensures that decoder cannot see the future.
+    """
     attn_shape = (1, size, size)
     subsequent_mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
     return torch.from_numpy(subsequent_mask) == 0
 
+
 def attention(query, key, value, mask=None, dropout=None):
-    "Compute 'Scaled Dot Product Attention'"
+    """
+    Compute 'Scaled Dot Product Attention'
+    """
+    # Get size of query
     d_k = query.size(-1)
+    # Multiply query with key to get scores. Scale scores by squarred size 
     scores = torch.matmul(query, key.transpose(-2, -1)) \
              / math.sqrt(d_k)
+    # Nullify the scores for masked positions
     if mask is not None:
         scores = scores.masked_fill(mask == 0, -1e9)
-    p_attn = F.softmax(scores, dim = -1)
+    # Apply softmax
+    p_attn = F.softmax(scores, dim=-1)
+    # Apply dropout
     if dropout is not None:
         p_attn = dropout(p_attn)
+    # Multiply by values to get the final attention output.
     return torch.matmul(p_attn, value), p_attn
 
+
 class MultiHeadedAttention(nn.Module):
+    """
+    Represents a module with multiple attention heads side by side.
+    """
     def __init__(self, h, d_model, dropout=0.1):
+        '''
+        params: 
+            h -> number of heads
+            d_model -> width of hidden layer
+        '''
         "Take in model size and number of heads."
         super(MultiHeadedAttention, self).__init__()
         assert d_model % h == 0
@@ -179,9 +207,13 @@ class MultiHeadedAttention(nn.Module):
              .view(nbatches, -1, self.h * self.d_k)
         return self.linears[-1](x)
 
+
 class PositionwiseFeedForward(nn.Module):
     "Implements FFN equation."
     def __init__(self, d_model, d_ff, dropout=0.1):
+        '''
+        Adds a hidden layer with dimension d_ff
+        '''
         super(PositionwiseFeedForward, self).__init__()
         self.w_1 = nn.Linear(d_model, d_ff)
         self.w_2 = nn.Linear(d_ff, d_model)
@@ -190,6 +222,7 @@ class PositionwiseFeedForward(nn.Module):
     def forward(self, x):
         return self.w_2(self.dropout(F.relu(self.w_1(x))))
 
+
 class PositionalEncoding(nn.Module):
     "Implement the PE function."
     def __init__(self, d_model, dropout, max_len=5000):
@@ -197,23 +230,28 @@ class PositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
         
         # Compute the positional encodings once in log space.
+        # Initialize empty vector with dimensions
         pe = torch.zeros(max_len, d_model)
+        # Get linspace
         position = torch.arange(0, max_len).unsqueeze(1)
+        # Get exponential term in log space
         div_term = torch.exp(torch.arange(0, d_model, 2) *
                              -(math.log(10000.0) / d_model))
+        # apply sine on even positions of array
         pe[:, 0::2] = torch.sin(position * div_term)
+        # Apply cosine on odd positions
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe)
         
     def forward(self, x):
+        # Add the positional 'bias' to the input and dropout
         x = x + Variable(self.pe[:, :x.size(1)], 
                          requires_grad=False)
         return self.dropout(x)
 
 
-def make_model(src_vocab, tgt_vocab, N=6, 
-               d_model=512, d_ff=2048, h=8, dropout=0.1):
+def make_model(N=6, d_model=512, d_ff=2048, h=8, dropout=0.1):
     "Helper: Construct a model from hyperparameters."
     c = copy.deepcopy
     attn = MultiHeadedAttention(h, d_model)
@@ -223,9 +261,8 @@ def make_model(src_vocab, tgt_vocab, N=6,
         Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
         Decoder(DecoderLayer(d_model, c(attn), c(attn), 
                              c(ff), dropout), N),
-        nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
-        nn.Sequential(Embeddings(d_model, tgt_vocab), c(position)),
-        Generator(d_model, tgt_vocab))
+        c(position),
+        c(position))
     
     # This was important from their code. 
     # Initialize parameters with Glorot / fan_avg.
