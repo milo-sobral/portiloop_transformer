@@ -251,16 +251,16 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
-def make_model(N=6, d_model=512, d_ff=2048, h=8, dropout=0.1):
+def make_model(config):
     "Helper: Construct a model from hyperparameters."
     c = copy.deepcopy
-    attn = MultiHeadedAttention(h, d_model)
-    ff = PositionwiseFeedForward(d_model, d_ff, dropout)
-    position = PositionalEncoding(d_model, dropout)
+    attn = MultiHeadedAttention(config['h'], config['d_model'])
+    ff = PositionwiseFeedForward(config['d_model'], config['d_ff'], config['dropout'])
+    position = PositionalEncoding(config['d_model'], config['dropout'])
     model = EncoderDecoder(
-        Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
-        Decoder(DecoderLayer(d_model, c(attn), c(attn), 
-                             c(ff), dropout), N),
+        Encoder(EncoderLayer(config['d_model'], c(attn), c(ff), config['dropout']), config['n']),
+        Decoder(DecoderLayer(config['d_model'], c(attn), c(attn), 
+                             c(ff), config['dropout']), config['n']),
         c(position),
         c(position))
     
