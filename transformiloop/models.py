@@ -154,16 +154,6 @@ class DecoderLayer(nn.Module):
         return self.sublayer[2](x, self.feed_forward)
 
 
-def subsequent_mask(size):
-    """
-    Mask out subsequent positions.
-    Ensures that decoder cannot see the future.
-    """
-    attn_shape = (1, size, size)
-    subsequent_mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
-    return torch.from_numpy(subsequent_mask) == 0
-
-
 def attention(query, key, value, mask=None, dropout=None):
     """
     Compute 'Scaled Dot Product Attention'
@@ -265,8 +255,10 @@ class PositionalEncoding(nn.Module):
         
     def forward(self, x):
         # Add the positional 'bias' to the input and dropout
-        x = x + Variable(self.pe[:, :x.size(1)], 
+        var_tensor = Variable(self.pe[:, :x.size(1)], 
                          requires_grad=False)
+        x = x.unsqueeze(-1)
+        x = x + var_tensor
         return self.dropout(x)
 
 
@@ -288,5 +280,5 @@ def make_model(config=DEFAULT_CONFIG):
     # Initialize parameters with Glorot / fan_avg.
     for p in model.parameters():
         if p.dim() > 1:
-            nn.init.xavier_uniform(p)
+            nn.init.xavier_uniform_(p)
     return model
