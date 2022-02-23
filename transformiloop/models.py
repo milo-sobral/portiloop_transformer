@@ -6,17 +6,27 @@ import math, copy
 from torch.autograd import Variable
 
 
+DEFAULT_CONFIG = {
+    'N': 6,
+    'd_model': 512,
+    'd_ff': 2048,
+    'h': 8,
+    'dropout': 0.1
+}
+
+
 class EncoderDecoder(nn.Module):
     """
     A standard Encoder-Decoder architecture. Base for this and many 
     other models.
     """
-    def __init__(self, encoder, decoder, src_encode, tgt_encode):
+    def __init__(self, encoder, decoder, src_encode, tgt_encode, generator):
         super(EncoderDecoder, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.src_encode = src_encode
         self.tgt_encode = tgt_encode
+        self.generator = generator
         
     def forward(self, src, tgt, src_mask, tgt_mask):
         "Take in and process masked src and target sequences."
@@ -28,6 +38,16 @@ class EncoderDecoder(nn.Module):
     
     def decode(self, memory, src_mask, tgt, tgt_mask):
         return self.decoder(self.tgt_encode(tgt), memory, src_mask, tgt_mask)
+
+
+class Generator(nn.Module):
+    "Define standard linear + softmax generation step."
+    def __init__(self, d_model, vocab):
+        super(Generator, self).__init__()
+        self.proj = nn.Linear(d_model, vocab)
+
+    def forward(self, x):
+        return F.log_softmax(self.proj(x), dim=-1)
 
 
 def clones(module, N):
@@ -250,7 +270,7 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
-def make_model(config):
+def make_model(tgt_vocab, config=DEFAULT_CONFIG):
     "Helper: Construct a model from hyperparameters."
     c = copy.deepcopy
     attn = MultiHeadedAttention(config['h'], config['d_model'])
@@ -261,7 +281,8 @@ def make_model(config):
         Decoder(DecoderLayer(config['d_model'], c(attn), c(attn), 
                              c(ff), config['dropout']), config['n']),
         c(position),
-        c(position))
+        c(position),
+        Generator(config['d_model'], tgt_vocab))
     
     # This was important from their code. 
     # Initialize parameters with Glorot / fan_avg.
