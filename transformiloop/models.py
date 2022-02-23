@@ -277,9 +277,9 @@ def make_model(tgt_vocab, config=DEFAULT_CONFIG):
     ff = PositionwiseFeedForward(config['d_model'], config['d_ff'], config['dropout'])
     position = PositionalEncoding(config['d_model'], config['dropout'])
     model = EncoderDecoder(
-        Encoder(EncoderLayer(config['d_model'], c(attn), c(ff), config['dropout']), config['n']),
+        Encoder(EncoderLayer(config['d_model'], c(attn), c(ff), config['dropout']), config['N']),
         Decoder(DecoderLayer(config['d_model'], c(attn), c(attn), 
-                             c(ff), config['dropout']), config['n']),
+                             c(ff), config['dropout']), config['N']),
         c(position),
         c(position),
         Generator(config['d_model'], tgt_vocab))
