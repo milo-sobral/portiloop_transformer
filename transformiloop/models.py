@@ -42,12 +42,12 @@ class EncoderDecoder(nn.Module):
 
 class Generator(nn.Module):
     "Define standard linear + softmax generation step."
-    def __init__(self, d_model, vocab):
+    def __init__(self, d_model):
         super(Generator, self).__init__()
-        self.proj = nn.Linear(d_model, vocab)
+        self.proj = nn.Linear(d_model, 1)
 
     def forward(self, x):
-        return F.log_softmax(self.proj(x), dim=-1)
+        return self.proj(x)
 
 
 def clones(module, N):
@@ -270,7 +270,7 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
-def make_model(tgt_vocab, config=DEFAULT_CONFIG):
+def make_model(config=DEFAULT_CONFIG):
     "Helper: Construct a model from hyperparameters."
     c = copy.deepcopy
     attn = MultiHeadedAttention(config['h'], config['d_model'])
@@ -282,7 +282,7 @@ def make_model(tgt_vocab, config=DEFAULT_CONFIG):
                              c(ff), config['dropout']), config['N']),
         c(position),
         c(position),
-        Generator(config['d_model'], tgt_vocab))
+        Generator(config['d_model']))
     
     # This was important from their code. 
     # Initialize parameters with Glorot / fan_avg.
