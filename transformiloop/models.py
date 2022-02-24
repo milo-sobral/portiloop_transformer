@@ -34,6 +34,8 @@ class EncoderDecoder(nn.Module):
                             tgt, tgt_mask)
     
     def encode(self, src, src_mask):
+        print(f"start of encode: {torch.cuda.memory_allocated(0)}")
+
         return self.encoder(self.src_encode(src), src_mask)
     
     def decode(self, memory, src_mask, tgt, tgt_mask):
@@ -160,6 +162,7 @@ def attention(query, key, value, mask=None, dropout=None):
     """
     # Get size of query
     d_k = query.size(-1)
+
     # Multiply query with key to get scores. Scale scores by squarred size 
     scores = torch.matmul(query, key.transpose(-2, -1)) \
              / math.sqrt(d_k)
@@ -229,12 +232,13 @@ class PositionwiseFeedForward(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
+        
         return self.w_2(self.dropout(F.relu(self.w_1(x))))
 
 
 class PositionalEncoding(nn.Module):
     "Implement the PE function."
-    def __init__(self, d_model, dropout, max_len=5000):
+    def __init__(self, d_model, dropout, max_len=512):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
         
@@ -251,14 +255,23 @@ class PositionalEncoding(nn.Module):
         # Apply cosine on odd positions
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
+        # self.pe = pe
         self.register_buffer('pe', pe)
         
     def forward(self, x):
+        print(f"start of positional_encoding: {torch.cuda.memory_allocated(0)}")
         # Add the positional 'bias' to the input and dropout
         var_tensor = Variable(self.pe[:, :x.size(1)], 
-                         requires_grad=False)
+                         requires_grad=False).cuda()
+        print(f"start of 123: {torch.cuda.memory_allocated(0)}")
+     
         x = x.unsqueeze(-1)
+        print(f"start of 456: {torch.cuda.memory_allocated(0)}")
+        print(x.shape)
+
         x = x + var_tensor
+        print(x.shape)
+        print(f"End of positional_encoding: {torch.cuda.memory_allocated(0)}")
         return self.dropout(x)
 
 

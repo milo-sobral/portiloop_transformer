@@ -39,7 +39,6 @@ def rebatch(dataloader, batch_size, seq_len):
     batch = next(iter(dataloader))
     (x, _, _, y) = batch
     x = torch.reshape(x, (batch_size, seq_len))
-    mask = torch.ones(x.size())
     src = Variable(x, requires_grad=False).cuda()
     tgt = Variable(x, requires_grad=False).cuda()
     print(src.shape)
@@ -53,9 +52,12 @@ def run_epoch(data_iter, model, loss_compute):
     total_loss = 0
     tokens = 0
     for i, batch in enumerate(data_iter):
+        print(f"start of forward: {torch.cuda.memory_allocated(0)}")
+
         out = model.forward(batch.src, batch.trg, 
                             batch.src_mask, batch.trg_mask)
         loss = loss_compute(out, batch.trg_y, batch.ntokens)
+
         total_loss += float(loss)
         total_tokens += batch.ntokens
         tokens += batch.ntokens
@@ -65,6 +67,7 @@ def run_epoch(data_iter, model, loss_compute):
                     (i, loss / batch.ntokens, tokens / elapsed))
             start = time.time()
             tokens = 0
+
     return total_loss / total_tokens
 
 
