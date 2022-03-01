@@ -34,8 +34,6 @@ class EncoderDecoder(nn.Module):
                             tgt, tgt_mask)
     
     def encode(self, src, src_mask):
-        print(f"start of encode: {torch.cuda.memory_allocated(0)}")
-
         return self.encoder(self.src_encode(src), src_mask)
     
     def decode(self, memory, src_mask, tgt, tgt_mask):
@@ -259,19 +257,13 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
         
     def forward(self, x):
-        print(f"start of positional_encoding: {torch.cuda.memory_allocated(0)}")
         # Add the positional 'bias' to the input and dropout
         var_tensor = Variable(self.pe[:, :x.size(1)], 
                          requires_grad=False).cuda()
-        print(f"start of 123: {torch.cuda.memory_allocated(0)}")
      
         x = x.unsqueeze(-1)
-        print(f"start of 456: {torch.cuda.memory_allocated(0)}")
-        print(x.shape)
 
         x = x + var_tensor
-        print(x.shape)
-        print(f"End of positional_encoding: {torch.cuda.memory_allocated(0)}")
         return self.dropout(x)
 
 

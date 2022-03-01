@@ -35,14 +35,16 @@ def subsequent_mask(size):
     return torch.from_numpy(subsequent_mask) == 0
 
 
-def rebatch(dataloader, batch_size, seq_len):
-    batch = next(iter(dataloader))
-    (x, _, _, y) = batch
-    x = torch.reshape(x, (batch_size, seq_len))
-    src = Variable(x, requires_grad=False).cuda()
-    tgt = Variable(x, requires_grad=False).cuda()
-    print(src.shape)
-    yield Batch(src, trg=tgt)
+def rebatch(dataloader, batch_size, seq_len, take_y=False):
+    for batch in dataloader:
+        (x, _, _, y) = batch
+        x = torch.reshape(x, (batch_size, seq_len))
+        src = Variable(x, requires_grad=False).cuda()
+        if take_y:
+            tgt = Variable(y, requires_grad=False).cuda()
+        else:
+            tgt = Variable(x, requires_grad=False).cuda()
+        yield Batch(src, trg=tgt)
 
 
 def run_epoch(data_iter, model, loss_compute):
@@ -51,15 +53,15 @@ def run_epoch(data_iter, model, loss_compute):
     total_tokens = 0
     total_loss = 0
     tokens = 0
+    
     for i, batch in enumerate(data_iter):
-        print(f"start of forward: {torch.cuda.memory_allocated(0)}")
 
         out = model.forward(batch.src, batch.trg, 
                             batch.src_mask, batch.trg_mask)
         loss = loss_compute(out, batch.trg_y, batch.ntokens)
 
         total_loss += float(loss)
-        total_tokens += batch.ntokens
+        total_tokens += int(batch.ntokens)
         tokens += batch.ntokens
         if i % 50 == 1:
             elapsed = time.time() - start
@@ -67,7 +69,6 @@ def run_epoch(data_iter, model, loss_compute):
                     (i, loss / batch.ntokens, tokens / elapsed))
             start = time.time()
             tokens = 0
-
     return total_loss / total_tokens
 
 
