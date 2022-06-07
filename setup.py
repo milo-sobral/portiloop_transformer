@@ -2,7 +2,7 @@
 from setuptools import setup, find_packages
 
 setup(name='transformiloop',
-      version='0.0.1',
+      version='0.0.2',
       description='Transformer model to be used to train and infer portiloop EEG data',
       author='Milo Sobral',
       author_email='milosobral@gmail.com',
@@ -11,5 +11,8 @@ setup(name='transformiloop',
       install_requires=[
         'numpy',
         'matplotlib',
-        'torch']
+        'torch',
+        'einops',
+        'wandb',
+        'torchinfo']
      )
