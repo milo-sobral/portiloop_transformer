@@ -30,14 +30,31 @@ class EncoderDecoder(nn.Module):
         
     def forward(self, src, tgt, src_mask, tgt_mask):
         "Take in and process masked src and target sequences."
-        return self.decode(self.encode(src, src_mask), src_mask,
-                            tgt, tgt_mask)
+        return self.generator(self.decode(self.encode(src, src_mask), src_mask,
+                            tgt, tgt_mask)).squeeze(-1)
     
     def encode(self, src, src_mask):
         return self.encoder(self.src_encode(src), src_mask)
     
     def decode(self, memory, src_mask, tgt, tgt_mask):
         return self.decoder(self.tgt_encode(tgt), memory, src_mask, tgt_mask)
+
+class TransformerClassifier(nn.Module):
+    """
+    A standard Encoder-Decoder architecture. Base for this and many 
+    other models.
+    """
+    def __init__(self, encoder, positional_encoder, d_output):
+        super(TransformerClassifier, self).__init__()
+        self.encoder = encoder
+        self.positional_encoder = positional_encoder
+        self.linear = nn.Linear(d_output, 1)
+        self.sigmoid =  nn.Sigmoid()
+        
+    def forward(self, src, src_mask):
+        x = self.encoder(self.positional_encoder(src), src_mask)
+        x = torch.flatten(x, start_dim=1)
+        return self.sigmoid(self.linear(x))
 
 
 class Generator(nn.Module):
@@ -230,7 +247,6 @@ class PositionwiseFeedForward(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        
         return self.w_2(self.dropout(F.relu(self.w_1(x))))
 
 
@@ -273,17 +289,23 @@ def make_model(config=DEFAULT_CONFIG):
     attn = MultiHeadedAttention(config['h'], config['d_model'])
     ff = PositionwiseFeedForward(config['d_model'], config['d_ff'], config['dropout'])
     position = PositionalEncoding(config['d_model'], config['dropout'])
-    model = EncoderDecoder(
-        Encoder(EncoderLayer(config['d_model'], c(attn), c(ff), config['dropout']), config['N']),
-        Decoder(DecoderLayer(config['d_model'], c(attn), c(attn), 
-                             c(ff), config['dropout']), config['N']),
-        c(position),
-        c(position),
-        Generator(config['d_model']))
+
+    # model = TransformerClassifier(
+    #     Encoder(EncoderLayer(config['d_model'], c(attn), c(ff), config['dropout']), config['N']),
+    #     c(position), 
+    #     config['d_model']**2
+    # )
+
+    model = TransformerClassifier(
+        nn.TransformerEncoder(nn.TransformerEncoderLayer(config['d_model'], 8), 6),
+        c(position), 
+        config['d_model']**2
+    )
     
     # This was important from their code. 
     # Initialize parameters with Glorot / fan_avg.
     for p in model.parameters():
         if p.dim() > 1:
             nn.init.xavier_uniform_(p)
+
     return model

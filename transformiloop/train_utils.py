@@ -8,13 +8,11 @@ class Batch:
     "Object for holding a batch of data with mask during training."
     def __init__(self, src, trg=None, pad=-99999):
         self.src = src
-        self.src_mask = (src != pad).unsqueeze(-2)
+        # self.src_mask = (src != pad).unsqueeze(-2)
+        self.src_mask = torch.ones(512, 64, 64).cuda()
         if trg is not None:
-            self.trg = trg[:, :-1]
-            self.trg_y = trg[:, 1:]
-            self.trg_mask = \
-                self.make_std_mask(self.trg, pad)
-            self.ntokens = (self.trg_y != pad).data.sum()
+            self.trg = trg
+            # self.ntokens = (self.trg_y != pad).data.sum()
     
     @staticmethod
     def make_std_mask(tgt, pad):
@@ -35,41 +33,40 @@ def subsequent_mask(size):
     return torch.from_numpy(subsequent_mask) == 0
 
 
-def rebatch(dataloader, batch_size, seq_len, take_y=False):
-    for batch in dataloader:
-        (x, _, _, y) = batch
-        x = torch.reshape(x, (batch_size, seq_len))
-        src = Variable(x, requires_grad=False).cuda()
-        if take_y:
-            tgt = Variable(y, requires_grad=False).cuda()
-        else:
-            tgt = Variable(x, requires_grad=False).cuda()
-        yield Batch(src, trg=tgt)
+def rebatch(batch, batch_size, seq_len, take_y=False):
+    (x, _, _, y) = batch
+    x = torch.reshape(x, (batch_size, seq_len))
+    src = Variable(x, requires_grad=False).cuda()
+    if take_y:
+        tgt = Variable(y, requires_grad=False).cuda()
+    else:
+        tgt = Variable(x, requires_grad=False).cuda()
+    return Batch(src, trg=tgt)
 
 
-def run_epoch(data_iter, model, loss_compute):
+def run_epoch(data_iter, model, loss_compute, batch_filter=None, batch_limit=None):
     "Standard Training and Logging Function"
-    start = time.time()
-    total_tokens = 0
     total_loss = 0
-    tokens = 0
     
-    for i, batch in enumerate(data_iter):
-
+    for batch_count, batch in enumerate(data_iter):
+        if batch_filter is not None:
+            batch = batch_filter(batch)
+        start_time = time.time()
         out = model.forward(batch.src, batch.trg, 
                             batch.src_mask, batch.trg_mask)
         loss = loss_compute(out, batch.trg_y, batch.ntokens)
 
         total_loss += float(loss)
-        total_tokens += int(batch.ntokens)
-        tokens += batch.ntokens
-        if i % 50 == 1:
-            elapsed = time.time() - start
-            print("Epoch Step: %d Loss: %f Tokens per Sec: %f" %
-                    (i, loss / batch.ntokens, tokens / elapsed))
-            start = time.time()
-            tokens = 0
-    return total_loss / total_tokens
+        end_time = time.time()
+
+        if batch_limit is not None:
+            if batch_count >= batch_limit:
+                break  
+
+        if batch_count % 50 == 1:
+            print("Batch #%d | Loss: %f | runtime: %fms" %
+                    (batch_count, loss, end_time-start_time))
+    return total_loss / batch_count
 
 
 class NoamOpt:
@@ -115,9 +112,10 @@ class SimpleLossCompute:
         x = self.generator(x)
         loss = self.criterion(x.contiguous().view(-1, x.size(-1)), 
                               y.contiguous().view(-1).unsqueeze(-1)) / norm
+
+        # Check that we are training
         if self.opt is not None:
             loss.backward()
-
-            self.opt.step()
             self.opt.optimizer.zero_grad()
+            self.opt.step()
         return loss.item() * norm
