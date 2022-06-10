@@ -4,7 +4,7 @@ import math
 from einops import rearrange, repeat
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
-from embedding_models import PositionalEncoding
+from transformiloop.models.embedding_models import PositionalEncoding
 
 
 class TransformerExtractor(nn.Module):
@@ -13,7 +13,8 @@ class TransformerExtractor(nn.Module):
                  n_heads: int,
                  dim_hidden: int,
                  n_layers: int,
-                 dropout: float):
+                 dropout: float,
+                 device):
         """Transformer Encoder based module which layers positional encoding on a sequence and encodes it using attention mechanism.
 
         Args:
@@ -24,8 +25,9 @@ class TransformerExtractor(nn.Module):
             dropout (float): dropout value
         """
         super().__init__()
+        self.embedder = nn.Linear(1, d_model, device=device)
         self.pos_encoder = PositionalEncoding(d_model, dropout)
-        encoder_layers = TransformerEncoderLayer(d_model, n_heads, dim_hidden, dropout)
+        encoder_layers = TransformerEncoderLayer(d_model, n_heads, dim_hidden, dropout, batch_first=True)
         self.transformer_encoder = TransformerEncoder(encoder_layers, n_layers)
         self.d_model = d_model
 
@@ -38,12 +40,14 @@ class TransformerExtractor(nn.Module):
             output Tensor of shape [batch_size, out_seq_len, d_model]
         '''
         # Add positional encoding
-        x = repeat(x, 'b s -> s b e', e=1)
+        x = repeat(x, 'b s -> b s e', e=1)
+        x = self.embedder(x)
+        x = rearrange(x, 'b s e -> s b e')
         x = self.pos_encoder(x)
+        x = rearrange(x, 's b e -> b s e')
 
         # Go through transformer encoder
         x = self.transformer_encoder(x)
-        x = rearrange(x, 's b e -> b s e')
 
         return x
 

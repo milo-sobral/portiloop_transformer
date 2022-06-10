@@ -8,8 +8,8 @@ class SequenceDataset(Dataset):
         self, 
         X: list, 
         Y: list, 
-        input_noise: bool,
-        device):
+        device,
+        input_noise: bool):
         """Dataset Wrapper for Sequence to Sequence pretraining
 
         Args:
@@ -84,7 +84,8 @@ def prepare_from_file(
     batch_size: int, 
     num_train: int, 
     input_window: int, 
-    output_window: int, 
+    output_window: int,
+    device, 
     train_percentage=0.7):
     """Prepares a training and a validation dataset from scratch
 
@@ -113,11 +114,11 @@ def prepare_from_file(
     val_sequence_x, val_sequence_y = create_sequences(val_data, input_window, output_window)
 
     train_loader = DataLoader(
-        SequenceDataset(train_sequence_x, train_sequence_y, input_noise=False), 
+        SequenceDataset(train_sequence_x, train_sequence_y, device, input_noise=False), 
         batch_size=batch_size, 
         shuffle=True)
     val_loader = DataLoader(
-        SequenceDataset(val_sequence_x, val_sequence_y, input_noise=False), 
+        SequenceDataset(val_sequence_x, val_sequence_y, device, input_noise=False), 
         batch_size=batch_size, 
         shuffle=True)
     return train_loader, val_loader

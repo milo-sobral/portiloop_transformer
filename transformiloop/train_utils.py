@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import wandb
 
 class MultiTaskLoss(nn.Module):
-    def __init__(self, num_tasks):
+    def __init__(self, num_tasks, device):
         super(MultiTaskLoss, self).__init__()
         self.num_tasks = num_tasks
         self.log_vars = nn.Parameter(torch.zeros((num_tasks))).to(device)
@@ -34,8 +34,18 @@ def train_model(model, config, train_loader, val_loader):
 
         for batch_id, (source, target_pred, target_rec) in enumerate(train_loader):
             config["optimizer"].zero_grad()
-            target = (target_pred, target_rec)
+
             prediction = model(source)
+
+            if config["task"] == "both":
+                target = [target_pred, target_rec]
+            elif config["task"] == "pred":
+                target = [target_pred]
+                prediction = [prediction[0]]
+            elif config["task"] == "rec":
+                target = [target_rec]
+                prediction = [prediction[1]]
+
             loss = config["loss_func"](prediction, target)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip'])
@@ -49,7 +59,7 @@ def train_model(model, config, train_loader, val_loader):
         train_loss = avg_loss / counter
 
         # Evaluate model
-        eval_loss = eval_model()
+        eval_loss = eval_model(model, config, val_loader)
 
         print(f"Losses at end of epoch: Train: {train_loss}, Eval: {eval_loss}")
         lr = config["scheduler"].get_last_lr()[0]
@@ -74,8 +84,17 @@ def eval_model(model, config, val_loader):
 
     for batch_id, (source, target_pred, target_rec) in enumerate(val_loader):
         with torch.no_grad():
-            target = (target_pred, target_rec)
             prediction = model(source)
+
+            if config["task"] == "both":
+                target = [target_pred, target_rec]
+            elif config["task"] == "pred":
+                target = [target_pred]
+                prediction = [prediction[0]]
+            elif config["task"] == "rec":
+                target = [target_rec]
+                prediction = [prediction[1]]
+                
             loss = config["loss_func"](prediction, target)
             avg_loss += loss.item()
             counter += 1

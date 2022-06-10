@@ -1,6 +1,6 @@
 from torch import tensor
 import torch.nn as nn
-from transformiloop.models.helper_models import TransformerExtractor, MLPLatent
+from transformiloop.models.helper_models import TransformerExtractor, MLPLatent, SeqRecCNN
 
 class PredictionModel(nn.Module):
     def __init__(
@@ -14,6 +14,7 @@ class PredictionModel(nn.Module):
         latent_dim: int, 
         num_channels_deconv: int, 
         num_layers_deconv: int,
+        device,
         dropout: float = 0.5):
         """Prediction module to build models used for pretraining on EEG data.
 
@@ -35,15 +36,16 @@ class PredictionModel(nn.Module):
                                                           n_heads=n_heads,
                                                           dim_hidden=dim_hidden,
                                                           n_layers=n_layers,
-                                                          dropout=dropout)       
+                                                          dropout=dropout,
+                                                          device=device)       
 
-        # self.latent = MLPLatent(latent_dim, 2, d_model, seq_len)
+        self.latent = MLPLatent(latent_dim, 1, d_model, seq_len, device)
 
         # self.predictor = SeqRecCNN(latent_dim, num_layers_deconv, num_channels_deconv, prediction_len)
         # self.recreator = SeqRecCNN(latent_dim, num_layers_deconv, num_channels_deconv, seq_len)
 
-        self.predictor = MLPLatent(prediction_len, 0, d_model, seq_len)
-        self.recreator = MLPLatent(seq_len, 0, d_model, seq_len)
+        self.predictor = nn.Linear(latent_dim, prediction_len)
+        self.recreator = nn.Linear(latent_dim, seq_len)
 
     def forward(self, x: tensor):
         """_summary_
@@ -60,9 +62,8 @@ class PredictionModel(nn.Module):
         x = self.transformer_extractor(x)
 
         # Get latent vector
-        # x = self.latent(x)
-
-        # Generate output signal from latent vector
+        x = self.latent(x)
+        # # Generate output signal from latent vector
         x_rec = self.recreator(x)
         x_pred = self.predictor(x)
         return x_pred, x_rec
