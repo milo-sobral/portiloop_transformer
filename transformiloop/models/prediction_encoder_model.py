@@ -3,16 +3,18 @@ import torch.nn as nn
 from transformiloop.models.helper_models import TransformerExtractor, MLPLatent
 
 class PredictionModel(nn.Module):
-    def __init__(self, d_model: int, 
-                 n_heads: int, 
-                 dim_hidden: int,
-                 n_layers: int, 
-                 prediction_len: int, 
-                 seq_len: int, 
-                 latent_dim: int, 
-                 num_channels_deconv: int, 
-                 num_layers_deconv: int,
-                 dropout: float = 0.5):
+    def __init__(
+        self, 
+        d_model: int, 
+        n_heads: int, 
+        dim_hidden: int,
+        n_layers: int, 
+        prediction_len: int, 
+        seq_len: int, 
+        latent_dim: int, 
+        num_channels_deconv: int, 
+        num_layers_deconv: int,
+        dropout: float = 0.5):
         """Prediction module to build models used for pretraining on EEG data.
 
         Args:

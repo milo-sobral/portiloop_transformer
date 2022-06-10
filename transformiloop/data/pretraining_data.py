@@ -4,16 +4,18 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class SequenceDataset(Dataset):
-    def __init__(self, 
-    X: list, 
-    Y: list, 
-    input_noise: bool):
+    def __init__(
+        self, 
+        X: list, 
+        Y: list, 
+        input_noise: bool,
+        device):
         """Dataset Wrapper for Sequence to Sequence pretraining
 
         Args:
             X (list): List of all input sequences
             Y (list): List of all desired output sequences
-            input_noise (bool): Booelan to determine if we want to add noise to input
+            input_noise (bool): Boolean to determine if we want to add noise to input
 
         Raises:
             Exception: Raises exception if the length of X does not match length of Y
@@ -21,6 +23,7 @@ class SequenceDataset(Dataset):
         self.X = X
         self.Y = Y
         self.input_noise = input_noise
+        self.device = device
         if len(self.X) != len(self.Y):
             raise Exception("The length of X does not match the length of Y")
 
@@ -47,10 +50,11 @@ class SequenceDataset(Dataset):
         if self.input_noise:
             _x = _x + torch.tensor(np.random.normal(0, 0.3, size=_x.shape), dtype=torch.float32)
 
-        return _x.to(device), _y.to(device), _x.to(device)
+        return _x.to(self.device), _y.to(self.device), _x.to(self.device)
 
 
-def create_sequences(input_data: list, 
+def create_sequences(
+    input_data: list, 
     seq_len:int, 
     output_window:int):
     """ Generate sequences of input and output to train the model on prediction tasks.
@@ -75,14 +79,14 @@ def create_sequences(input_data: list,
     array_y = np.stack(seqs_y)
     return torch.FloatTensor(array_x), torch.FloatTensor(array_y)
 
-def prepare_from_file(data: list, 
-                      batch_size: int, 
-                      num_train: int, 
-                      input_window: int, 
-                      output_window: int,
-                      recreate=False: int,
-                      train_percentage=0.7: float,):
-    """_summary_
+def prepare_from_file(
+    data: list, 
+    batch_size: int, 
+    num_train: int, 
+    input_window: int, 
+    output_window: int, 
+    train_percentage=0.7):
+    """Prepares a training and a validation dataset from scratch
 
     Args:
         data (list): _description_
@@ -90,11 +94,11 @@ def prepare_from_file(data: list,
         num_train (int): _description_
         input_window (int): _description_
         output_window (int): _description_
-        recreate (_type_, optional): _description_. Defaults to False:int.
-        train_percentage (_type_, optional): _description_. Defaults to 0.7:float.
+        train_percentage (float, optional): _description_. Defaults to 0.7.
 
     Returns:
-        _type_: _description_
+        x: Torch DataLoader with training split
+        y: Torch loader with validation split
     """
     if num_train is None:
         samples = int(len(data) * train_percentage)
