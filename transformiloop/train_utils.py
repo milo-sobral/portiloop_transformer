@@ -20,12 +20,12 @@ class MultiTaskLoss(nn.Module):
         return final_losses
 
 
-def train_model():
-    print(f'Starting training for {config["epochs"]} epochs, using {device}.')
+def train_model(model, config, train_loader, val_loader):
+    print(f'Starting training for {config["epochs"]} epochs, using {config["device"]}.')
     for e in range(config['epochs']):
         print(f'\nEpoch {e+1}')
 
-        model.to(device)
+        model.to(config['device'])
 
         # Training loop
         model.train()
@@ -33,13 +33,13 @@ def train_model():
         counter = 0
 
         for batch_id, (source, target_pred, target_rec) in enumerate(train_loader):
-            optimizer.zero_grad()
+            config["optimizer"].zero_grad()
             target = (target_pred, target_rec)
             prediction = model(source)
-            loss = loss_func(prediction, target)
+            loss = config["loss_func"](prediction, target)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip'])
-            optimizer.step()
+            config["optimizer"].step()
             
             if batch_id % config['log_every'] == 0:
                 print(f"Current loss: {loss.cpu().item()}")
@@ -52,21 +52,22 @@ def train_model():
         eval_loss = eval_model()
 
         print(f"Losses at end of epoch: Train: {train_loss}, Eval: {eval_loss}")
-        print(f"Using lr: {scheduler.get_last_lr()[0]}")
+        lr = config["scheduler"].get_last_lr()[0]
+        print(f"Using learning rate: {lr}")
 
-        test_data, y_data_pred, y_data_test = next(iter(val_loader))
+        test_data, y_data_pred, y_data_rec = next(iter(val_loader))
         result_pred, result_rec = model(test_data[0].unsqueeze(0).cuda())
-        plt.plot(torch.linspace(0, config['seq_len'], steps=config['seq_len']), output_rec[0].cpu(), label="Expected Recreate task")
+        plt.plot(torch.linspace(0, config['seq_len'], steps=config['seq_len']), y_data_rec[0].cpu(), label="Expected Recreate task")
         plt.plot(torch.linspace(0, config['seq_len'], steps=config['seq_len']), result_rec[0].cpu().detach(), label="Generated Recreate task")
-        plt.plot(torch.arange(config['seq_len'], config['seq_len'] + config['out_seq_len']), output_pred[0].cpu(), label="Expected Predict task")
+        plt.plot(torch.arange(config['seq_len'], config['seq_len'] + config['out_seq_len']), y_data_pred[0].cpu(), label="Expected Predict task")
         plt.plot(torch.arange(config['seq_len'], config['seq_len'] + config['out_seq_len']), result_pred[0].cpu().detach(), label="Generated Predict task")
         plt.legend()
-        wandb.log({'train_loss': train_loss, 'eval_loss':eval_loss, 'lr': scheduler.get_last_lr()[0], "chart_viz": plt})
+        wandb.log({'train_loss': train_loss, 'eval_loss':eval_loss, 'lr': config["scheduler"].get_last_lr()[0], "chart_viz": plt})
 
-        scheduler.step()
+        config["scheduler"].step()
 
 
-def eval_model():
+def eval_model(model, config, val_loader):
     model.eval()
     avg_loss = 0
     counter = 0
@@ -75,7 +76,7 @@ def eval_model():
         with torch.no_grad():
             target = (target_pred, target_rec)
             prediction = model(source)
-            loss = loss_func(prediction, target)
+            loss = config["loss_func"](prediction, target)
             avg_loss += loss.item()
             counter += 1
     final_loss = avg_loss / counter
