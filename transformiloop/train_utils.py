@@ -1,121 +1,83 @@
-import time
 import torch
-from torch.autograd import Variable
-import numpy as np
+import torch.nn as nn
+from matplotlib import pyplot as plt
+import wandb
+
+class MultiTaskLoss(nn.Module):
+    def __init__(self, num_tasks):
+        super(MultiTaskLoss, self).__init__()
+        self.num_tasks = num_tasks
+        self.log_vars = nn.Parameter(torch.zeros((num_tasks))).to(device)
+
+    def forward(self, predictions, targets):
+        assert len(predictions) == self.num_tasks, "Length of predictions must be number of tasks"
+        assert len(targets) == self.num_tasks, "Length of targets must be number of tasks"
+        mse = nn.MSELoss()
+
+        losses = [mse(prediction, target) for (prediction, target) in zip(predictions, targets)]
+        # final_losses = [torch.exp(-log_var) * loss + log_var for (log_var, loss) in zip(self.log_vars, losses)]
+        final_losses = sum(losses) / self.num_tasks
+        return final_losses
 
 
-class Batch:
-    "Object for holding a batch of data with mask during training."
-    def __init__(self, src, trg=None, pad=-99999):
-        self.src = src
-        # self.src_mask = (src != pad).unsqueeze(-2)
-        self.src_mask = torch.ones(512, 64, 64).cuda()
-        if trg is not None:
-            self.trg = trg
-            # self.ntokens = (self.trg_y != pad).data.sum()
-    
-    @staticmethod
-    def make_std_mask(tgt, pad):
-        "Create a mask to hide padding and future words."
-        tgt_mask = (tgt != pad).unsqueeze(-2)
-        tgt_mask = tgt_mask & Variable(
-            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
-        return tgt_mask
+def train_model():
+    print(f'Starting training for {config["epochs"]} epochs, using {device}.')
+    for e in range(config['epochs']):
+        print(f'\nEpoch {e+1}')
 
+        model.to(device)
 
-def subsequent_mask(size):
-    """
-    Mask out subsequent positions.
-    Ensures that decoder cannot see the future.
-    """
-    attn_shape = (1, size, size)
-    subsequent_mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
-    return torch.from_numpy(subsequent_mask) == 0
+        # Training loop
+        model.train()
+        avg_loss = 0
+        counter = 0
 
-
-def rebatch(batch, batch_size, seq_len, take_y=False):
-    (x, _, _, y) = batch
-    x = torch.reshape(x, (batch_size, seq_len))
-    src = Variable(x, requires_grad=False).cuda()
-    if take_y:
-        tgt = Variable(y, requires_grad=False).cuda()
-    else:
-        tgt = Variable(x, requires_grad=False).cuda()
-    return Batch(src, trg=tgt)
-
-
-def run_epoch(data_iter, model, loss_compute, batch_filter=None, batch_limit=None):
-    "Standard Training and Logging Function"
-    total_loss = 0
-    
-    for batch_count, batch in enumerate(data_iter):
-        if batch_filter is not None:
-            batch = batch_filter(batch)
-        start_time = time.time()
-        out = model.forward(batch.src, batch.trg, 
-                            batch.src_mask, batch.trg_mask)
-        loss = loss_compute(out, batch.trg_y, batch.ntokens)
-
-        total_loss += float(loss)
-        end_time = time.time()
-
-        if batch_limit is not None:
-            if batch_count >= batch_limit:
-                break  
-
-        if batch_count % 50 == 1:
-            print("Batch #%d | Loss: %f | runtime: %fms" %
-                    (batch_count, loss, end_time-start_time))
-    return total_loss / batch_count
-
-
-class NoamOpt:
-    "Optim wrapper that implements rate."
-    def __init__(self, model_size, factor, warmup, optimizer):
-        self.optimizer = optimizer
-        self._step = 0
-        self.warmup = warmup
-        self.factor = factor
-        self.model_size = model_size
-        self._rate = 0
-        
-    def step(self):
-        "Update parameters and rate"
-        self._step += 1
-        rate = self.rate()
-        for p in self.optimizer.param_groups:
-            p['lr'] = rate
-        self._rate = rate
-        self.optimizer.step()
-        
-    def rate(self, step = None):
-        "Implement `lrate` above"
-        if step is None:
-            step = self._step
-        return self.factor * \
-            (self.model_size ** (-0.5) *
-            min(step ** (-0.5), step * self.warmup ** (-1.5)))
-        
-def get_std_opt(model):
-    return NoamOpt(model.src_embed[0].d_model, 2, 4000,
-            torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
-
-
-class SimpleLossCompute:
-    "A simple loss compute and train function."
-    def __init__(self, generator, criterion, opt=None):
-        self.generator = generator
-        self.criterion = criterion
-        self.opt = opt
-        
-    def __call__(self, x, y, norm):
-        x = self.generator(x)
-        loss = self.criterion(x.contiguous().view(-1, x.size(-1)), 
-                              y.contiguous().view(-1).unsqueeze(-1)) / norm
-
-        # Check that we are training
-        if self.opt is not None:
+        for batch_id, (source, target_pred, target_rec) in enumerate(train_loader):
+            optimizer.zero_grad()
+            target = (target_pred, target_rec)
+            prediction = model(source)
+            loss = loss_func(prediction, target)
             loss.backward()
-            self.opt.optimizer.zero_grad()
-            self.opt.step()
-        return loss.item() * norm
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip'])
+            optimizer.step()
+            
+            if batch_id % config['log_every'] == 0:
+                print(f"Current loss: {loss.cpu().item()}")
+            avg_loss += loss.cpu().item()
+            counter += 1
+
+        train_loss = avg_loss / counter
+
+        # Evaluate model
+        eval_loss = eval_model()
+
+        print(f"Losses at end of epoch: Train: {train_loss}, Eval: {eval_loss}")
+        print(f"Using lr: {scheduler.get_last_lr()[0]}")
+
+        test_data, y_data_pred, y_data_test = next(iter(val_loader))
+        result_pred, result_rec = model(test_data[0].unsqueeze(0).cuda())
+        plt.plot(torch.linspace(0, config['seq_len'], steps=config['seq_len']), output_rec[0].cpu(), label="Expected Recreate task")
+        plt.plot(torch.linspace(0, config['seq_len'], steps=config['seq_len']), result_rec[0].cpu().detach(), label="Generated Recreate task")
+        plt.plot(torch.arange(config['seq_len'], config['seq_len'] + config['out_seq_len']), output_pred[0].cpu(), label="Expected Predict task")
+        plt.plot(torch.arange(config['seq_len'], config['seq_len'] + config['out_seq_len']), result_pred[0].cpu().detach(), label="Generated Predict task")
+        plt.legend()
+        wandb.log({'train_loss': train_loss, 'eval_loss':eval_loss, 'lr': scheduler.get_last_lr()[0], "chart_viz": plt})
+
+        scheduler.step()
+
+
+def eval_model():
+    model.eval()
+    avg_loss = 0
+    counter = 0
+
+    for batch_id, (source, target_pred, target_rec) in enumerate(val_loader):
+        with torch.no_grad():
+            target = (target_pred, target_rec)
+            prediction = model(source)
+            loss = loss_func(prediction, target)
+            avg_loss += loss.item()
+            counter += 1
+    final_loss = avg_loss / counter
+
+    return final_loss
