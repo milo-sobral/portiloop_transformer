@@ -66,7 +66,7 @@ def train_model(model, config, train_loader, val_loader):
             num_correct = 0
             num_samples = 0
             counter = 0
-            accuracy_scorer = Accuracy(num_classes=config['num_classes'], device=config['device']) 
+            accuracy_scorer = Accuracy(num_classes=config['num_classes']).to(config['device']) 
             for batch_id, (source, _, _ , target) in enumerate(train_loader):
                 config["optimizer"].zero_grad()
 
@@ -83,7 +83,7 @@ def train_model(model, config, train_loader, val_loader):
                 avg_loss += loss.item()
                 counter += 1
                 # Compute Accuracy
-                accuracy = accuracy_scorer(prediction, target)
+                accuracy = accuracy_scorer(prediction.to(config['device']), target.to(config['device']))
 
                 if batch_id % config['log_every'] == 0:
                     print(f"Current loss: {loss.cpu().item()}")
@@ -113,7 +113,6 @@ def train_model(model, config, train_loader, val_loader):
             print(f"Using learning rate: {lr}")
             stats = {'train_loss': train_loss, 'train_acc': train_acc, 'eval_loss':eval_loss, 'lr': config["scheduler"].get_last_lr()[0], "eval_acc": eval_acc, 'eval_f1': eval_f1}
             wandb.log(stats)
-            print(stats)
 
         config["scheduler"].step()
 
@@ -124,32 +123,34 @@ def eval_model_classification(model, config, val_loader):
     num_correct = 0
     num_samples = 0
     counter = 0
-    scorer = F1Score(num_classes=2, threshold=config['threshold'])
-    accuracy_scorer = Accuracy(num_classes=config['num_classes']) 
+    scorer = F1Score(num_classes=config['num_classes'], average='macro').to(config['device'])
+    accuracy_scorer = Accuracy(num_classes=config['num_classes']).to(config['device'])
 
-    sources, targets = None, None
+    predictions, targets = None, None
     for batch_id, (source, _, _, target) in enumerate(val_loader):
+        if batch_id > config['max_val_num']:
+            break
         with torch.no_grad():
             source = source.squeeze(1)
-            prediction = model(source)
-            target = convert_targets_to_logits(target)
+            prediction = model(source.to(config['device']))
+            target = convert_targets_to_logits(target).to(config['device'])
             # Compute loss
-            loss = config["loss_func"](prediction, target)
+            loss = config["loss_func"](prediction, target.type(torch.float))
             avg_loss += loss.item()
             counter += 1
             # Compute Accuracy
             
             # Add to f1 score to measure
-            if sources is None and targets is None:
-                sources = source
+            if predictions is None and targets is None:
+                predictions = prediction
                 targets = target
             else:
-                torch.cat(sources, source)
-                torch.cat(targets, target)
+                torch.cat((predictions, prediction), 0)
+                torch.cat((targets, target), 0)
 
     final_loss = avg_loss / counter
-    final_acc = accuracy_scorer(sources, targets)
-    f1_score = scorer(sources, targets)
+    final_acc = accuracy_scorer(predictions, targets)
+    f1_score = scorer(predictions, targets)
     return final_loss, final_acc, f1_score
 
 def eval_model_pretraining(model, config, val_loader):
