@@ -1,5 +1,7 @@
 from transformiloop.models.prediction_encoder_model import PredictionModel
 from transformiloop.models.classification_encoder_model import ClassificationModel
+import torch.nn as nn
+import copy
 
 
 def get_encoder_based_model(config):
@@ -28,3 +30,16 @@ def get_encoder_based_classifier(config):
         latent_dim=config['latent_dim'],
         device=config['device']
     )
+
+def retrieve_classifier_from_encoder(encoder, config):
+    new_encoder = copy.deepcopy(encoder.transformer_extractor)
+    new_latent = copy.deepcopy(encoder.latent)
+    if config['fix_weights']:
+        for param in new_encoder.parameters():
+            param.requires_grad = False
+        for param in new_latent.parameters():
+            param.requires_grad = False
+        new_encoder.requires_grad = False
+        new_latent.requires_grad = False
+    classifier = nn.Linear(config['latent_dim'], config['num_classes'])
+    return nn.Sequential(new_encoder, new_latent, classifier)

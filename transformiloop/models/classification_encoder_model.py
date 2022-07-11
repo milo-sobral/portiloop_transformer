@@ -37,9 +37,9 @@ class ClassificationModel(nn.Module):
                                                           dropout=dropout,
                                                           device=device)       
 
-        self.latent = MLPLatent(latent_dim, 1, d_model, seq_len, device)
-
-        self.classifier = nn.Linear(latent_dim, num_classes)
+        # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
+        self.flatten = nn.Flatten()
+        self.classifier = nn.Linear(d_model*seq_len, 1)
 
     def forward(self, x: tensor):
         """_summary_
@@ -56,7 +56,8 @@ class ClassificationModel(nn.Module):
         x = self.transformer_extractor(x)
 
         # Get latent vector
-        x = self.latent(x)
+        # x = self.latent(x)
+        x = self.flatten(x)
         # # Generate output signal from latent vector
         x = self.classifier(x)
         return x

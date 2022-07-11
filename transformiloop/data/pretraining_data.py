@@ -3,54 +3,42 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
 
-class SequenceDataset(Dataset):
-    def __init__(
-        self, 
-        X: list, 
-        Y: list, 
-        device,
-        input_noise: bool):
-        """Dataset Wrapper for Sequence to Sequence pretraining
+class PretrainingDataset(Dataset):
+    # Initialize your data, download, etc.
+    def __init__(self, sequences, augmentation_config):
+        super(PretrainingDataset, self).__init__()
+        # shuffle
+        np.random.shuffle(sequences)
+        # X_train, y_train = zip(*data)
+        # X_train, y_train = torch.stack(list(X_train), dim=0), torch.stack(list(y_train), dim=0)
+        X_train = torch.stack(list(sequences), dim=0)
 
-        Args:
-            X (list): List of all input sequences
-            Y (list): List of all desired output sequences
-            input_noise (bool): Boolean to determine if we want to add noise to input
+        if len(X_train.shape) < 3:
+            X_train = X_train.unsqueeze(2)
 
-        Raises:
-            Exception: Raises exception if the length of X does not match length of Y
-        """
-        self.X = X
-        self.Y = Y
-        self.input_noise = input_noise
-        self.device = device
-        if len(self.X) != len(self.Y):
-            raise Exception("The length of X does not match the length of Y")
+        if X_train.shape.index(min(X_train.shape)) != 1:  # make sure the Channels in second dim
+            X_train = X_train.permute(0, 2, 1)
 
-    def __len__(self):
-        """_summary_
+        self.x_data = X_train
 
-        Returns:
-            int: Length of the dataset
-        """
-        return len(self.X)
+        """Transfer x_data to Frequency Domain. If use fft.fft, the output has the same shape; if use fft.rfft, 
+        the output shape is half of the time window."""
+
+        window_length = self.x_data.shape[-1]
+        self.x_data_f = fft.fft(self.x_data).abs() #/(window_length) # rfft for real value inputs.
+        # self.x_data_f = self.x_data_f[:, :, 1:] # not a problem.
+
+        self.len = X_train.shape[0]
+        """Augmentation"""
+
+        self.aug1 = DataTransform_TD(self.x_data, augmentation_config)
+        self.aug1_f = DataTransform_FD(self.x_data_f) # [7360, 1, 90]
 
     def __getitem__(self, index):
-        """Get one item from the dataset
+        return self.x_data[index], self.aug1[index], self.x_data_f[index], self.aug1_f[index]
 
-        Args:
-            index (int): index of the desired datapoint
-
-        Returns:
-            a tuple (x, y, x): x is input sequence, y is desired prediction sequence.
-        """
-        _x = self.X[index]
-        _y = self.Y[index]
-
-        if self.input_noise:
-            _x = _x + torch.tensor(np.random.normal(0, 0.3, size=_x.shape), dtype=torch.float32)
-
-        return _x.to(self.device), _y.to(self.device), _x.to(self.device)
+    def __len__(self):
+        return self.len
 
 
 def create_sequences(

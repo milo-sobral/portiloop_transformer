@@ -4,6 +4,7 @@ import torch.nn as nn
 from matplotlib import pyplot as plt
 import wandb
 from torchmetrics import F1Score, Accuracy
+from sklearn.metrics import confusion_matrix, classification_report
 
 class MultiTaskLoss(nn.Module):
     def __init__(self, num_tasks, device):
@@ -63,33 +64,32 @@ def train_model(model, config, train_loader, val_loader):
             train_loss = avg_loss / counter
         elif config['mode'] == 'classification':
             avg_loss = 0
-            num_correct = 0
-            num_samples = 0
+            accuracy = 0
             counter = 0
-            accuracy_scorer = Accuracy(num_classes=config['num_classes']).to(config['device']) 
-            for batch_id, (source, _, _ , target) in enumerate(train_loader):
-                config["optimizer"].zero_grad()
+            accuracy_scorer = Accuracy().to(config['device']) 
+            for i in range(config['num_training_sets']):
+                for batch_id, (source, _, _ , target) in enumerate(train_loader):
+                    config["optimizer"].zero_grad()
 
-                source = source.squeeze(1)
-                prediction = model(source.to(config['device']))
-                target = convert_targets_to_logits(target).to(config['device'])
-                # Compute loss
-                loss = config["loss_func"](prediction, target.type(torch.float))
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip'])
-                config["optimizer"].step()
+                    source = source.squeeze(1)
+                    prediction = model(source.to(config['device']))
+                    target = target.unsqueeze(-1)
+                    # Compute loss
+                    loss = config["loss_func"](prediction, target.to(config['device']).type(torch.float))
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip'])
+                    config["optimizer"].step()
 
-                # Compute loss
-                avg_loss += loss.item()
-                counter += 1
-                # Compute Accuracy
-                accuracy = accuracy_scorer(prediction.to(config['device']), target.to(config['device']))
-
-                if batch_id % config['log_every'] == 0:
-                    print(f"Current loss: {loss.cpu().item()}")
-                    print(f"Current Accuracy: {accuracy}")
+                    # Compute loss
+                    avg_loss += loss.item()
+                    counter += 1
+                    # Compute Accuracy
+                    accuracy += accuracy_scorer(prediction.to(config['device']), target.to(config['device']).type(torch.int32))
+                print(f"Current loss: {avg_loss / counter}")
+                print(f"Current Accuracy: {accuracy / counter}")
+                    
             train_loss = avg_loss / counter
-            train_acc = accuracy
+            train_acc = accuracy / counter                        
 
         # Evaluate model
         if config['mode'] == 'pretraining':
@@ -107,11 +107,18 @@ def train_model(model, config, train_loader, val_loader):
             plt.legend()
             wandb.log({'train_loss': train_loss, 'eval_loss':eval_loss, 'lr': config["scheduler"].get_last_lr()[0], "chart_viz": plt})
         elif config['mode'] == 'classification':
-            eval_loss, eval_acc, eval_f1 = eval_model_classification(model, config, val_loader)
+            eval_loss, eval_acc, eval_precision, eval_recall, eval_f1 = eval_model_classification(model, config, val_loader)
             print(f"Losses at end of epoch: Train: {train_loss}, Eval: {eval_loss}")
             lr = config["scheduler"].get_last_lr()[0]
             print(f"Using learning rate: {lr}")
-            stats = {'train_loss': train_loss, 'train_acc': train_acc, 'eval_loss':eval_loss, 'lr': config["scheduler"].get_last_lr()[0], "eval_acc": eval_acc, 'eval_f1': eval_f1}
+            stats = {'train_loss': train_loss, 
+                     'train_acc': train_acc, 
+                     'eval_loss':eval_loss, 
+                     'lr': config["scheduler"].get_last_lr()[0], 
+                     "eval_acc": eval_acc, 
+                     "eval_precision": eval_precision,
+                     "eval_recall": eval_recall,
+                     'eval_f1': eval_f1}
             wandb.log(stats)
 
         config["scheduler"].step()
@@ -123,35 +130,65 @@ def eval_model_classification(model, config, val_loader):
     num_correct = 0
     num_samples = 0
     counter = 0
-    scorer = F1Score(num_classes=config['num_classes'], average='macro').to(config['device'])
-    accuracy_scorer = Accuracy(num_classes=config['num_classes']).to(config['device'])
+    scorer = F1Score(num_classes=1, average='macro').to(config['device'])
+    accuracy_scorer = Accuracy().to(config['device'])
 
     predictions, targets = None, None
     for batch_id, (source, _, _, target) in enumerate(val_loader):
         if batch_id > config['max_val_num']:
             break
         with torch.no_grad():
-            source = source.squeeze(1)
-            prediction = model(source.to(config['device']))
-            target = convert_targets_to_logits(target).to(config['device'])
+            source = source.squeeze(1).to(config['device'])
+            target = target.unsqueeze(-1).to(config['device'])
+            prediction = model(source)
             # Compute loss
             loss = config["loss_func"](prediction, target.type(torch.float))
             avg_loss += loss.item()
             counter += 1
-            # Compute Accuracy
-            
-            # Add to f1 score to measure
+
+            prediction = torch.sigmoid(prediction) > config['threshold']
             if predictions is None and targets is None:
                 predictions = prediction
                 targets = target
             else:
-                torch.cat((predictions, prediction), 0)
-                torch.cat((targets, target), 0)
+                predictions = torch.cat((predictions, prediction), 0)
+                targets = torch.cat((targets, target), 0)
+            # print(predictions.shape)
+    predictions = predictions.type(torch.int)
+    targets = targets.type(torch.int)
+
+    tp = (targets * predictions)
+    tn = ((1 - targets) * (1 - predictions))
+    fp = ((1 - targets) * predictions)
+    fn = (targets * (1 - predictions))
+
+    f1_score, precision, recall = get_metrics(tp, fp, fn)
+
+    # class_report = classification_report(predictions.type(torch.bool).tolist(), targets.type(torch.bool).tolist(), output_dict=True)
 
     final_loss = avg_loss / counter
-    final_acc = accuracy_scorer(predictions, targets)
-    f1_score = scorer(predictions, targets)
-    return final_loss, final_acc, f1_score
+    accuracy = (sum(tp) + sum(tn)) / (sum(tp) + sum(tn) + sum(fn) + sum(fp))
+    # final_acc = accuracy_scorer(predictions, targets.type(torch.int32))
+    # f1_score = scorer(predictions, targets.type(torch.int32).to(device=config['device']))
+    # accuracy = class_report['accuracy']
+    # precision = class_report['macro avg']['precision']
+    # recall = class_report['macro avg']['recall']
+    # f1_score = class_report['macro avg']['f1-score']
+
+    return final_loss, accuracy, precision, recall, f1_score
+
+def get_metrics(tp, fp, fn):
+    tp_sum = tp.sum().to(torch.float32).item()
+    fp_sum = fp.sum().to(torch.float32).item()
+    fn_sum = fn.sum().to(torch.float32).item()
+    epsilon = 1e-7
+
+    precision = tp_sum / (tp_sum + fp_sum + epsilon)
+    recall = tp_sum / (tp_sum + fn_sum + epsilon)
+
+    f1 = 2 * (precision * recall) / (precision + recall + epsilon)
+
+    return f1, precision, recall
 
 def eval_model_pretraining(model, config, val_loader):
     model.eval()
