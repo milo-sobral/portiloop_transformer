@@ -1,5 +1,5 @@
-from transformiloop.models.prediction_encoder_model import PredictionModel
-from transformiloop.models.classification_encoder_model import ClassificationModel
+from transformiloop.models.pretrainers.prediction_encoder_model import PredictionModel
+from transformiloop.models.classifiers.classification_encoder_model import ClassificationModel
 import torch.nn as nn
 import copy
 

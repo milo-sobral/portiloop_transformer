@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
+from transformiloop.data.augmentations import DataTransform_FD, DataTransform_TD
+import torch.fft as fft
 
 
 class PretrainingDataset(Dataset):
@@ -110,3 +112,23 @@ def prepare_from_file(
         batch_size=batch_size, 
         shuffle=True)
     return train_loader, val_loader
+
+
+def data_generator(data_path, config):
+    data = np.loadtxt(data_path)
+    samples = config['num_datapoints']
+    end = int((1-0.999) * config['num_datapoints']) + config['num_datapoints']
+    train_data = data[:samples]
+    # val_data = data[samples:end]
+    pretraining_seqs_train = create_sequences(train_data, config['seq_len'], 1)
+    # pretraining_seqs_val = create_sequences(val_data, config['seq_len'], 1)
+
+    # subset = True # if true, use a subset for debugging.
+    train_ds = PretrainingDataset(pretraining_seqs_train[0], config)
+    # val_ds = PretrainingDataset(pretraining_seqs_val[0], aug_config)
+    train_loader = torch.utils.data.DataLoader(dataset=train_ds, batch_size=config['batch_size'],
+                                              drop_last=True, shuffle=True, num_workers=0)
+    # val_loader = torch.utils.data.DataLoader(dataset=val_ds, batch_size=config['batch_size'],
+    #                                          drop_last=True, shuffle=True, num_workers=0)
+
+    return train_loader# , val_loader
