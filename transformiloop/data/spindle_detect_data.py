@@ -1,11 +1,13 @@
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Sampler
 from sklearn.model_selection import train_test_split
 import os
 import numpy as np
 import torch
 import torch.fft as fft
 import random
+from transformiloop.data.augmentations import DataTransform_TD, DataTransform_FD
+
 
 def get_subject_list(config):
     # Load all subject files
@@ -15,10 +17,10 @@ def get_subject_list(config):
     p2_subject = pd.read_csv(os.path.join(config['subjects_path'], 'subject_sequence_p2_big.txt'), header=None, delim_whitespace=True).to_numpy()
 
     # Get splits for train, validation and test
-    train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.8, random_state=SEED)
-    test_subject_p1, validation_subject_p1 = train_test_split(validation_subject_p1, train_size=0.5, random_state=SEED)
-    train_subject_p2, validation_subject_p2 = train_test_split(p2_subject, train_size=0.8, random_state=SEED)
-    test_subject_p2, validation_subject_p2 = train_test_split(validation_subject_p2, train_size=0.5, random_state=SEED)
+    train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.8, random_state=config['seed'])
+    test_subject_p1, validation_subject_p1 = train_test_split(validation_subject_p1, train_size=0.5, random_state=config['seed'])
+    train_subject_p2, validation_subject_p2 = train_test_split(p2_subject, train_size=0.8, random_state=config['seed'])
+    test_subject_p2, validation_subject_p2 = train_test_split(validation_subject_p2, train_size=0.5, random_state=config['seed'])
 
     # Get subject list depending on split
     train_subject = np.array([s for s in all_subject if s[0] in train_subject_p1[:, 0] or s[0] in train_subject_p2[:, 0]]).squeeze()

@@ -69,49 +69,51 @@ def create_sequences(
     array_y = np.stack(seqs_y)
     return torch.FloatTensor(array_x), torch.FloatTensor(array_y)
 
-def prepare_from_file(
-    data: list, 
-    batch_size: int, 
-    num_train: int, 
-    input_window: int, 
-    output_window: int,
-    device, 
-    train_percentage=0.7):
-    """Prepares a training and a validation dataset from scratch
 
-    Args:
-        data (list): _description_
-        batch_size (int): _description_
-        num_train (int): _description_
-        input_window (int): _description_
-        output_window (int): _description_
-        train_percentage (float, optional): _description_. Defaults to 0.7.
+# DEPRECATED
+# def prepare_from_file(
+#     data: list, 
+#     batch_size: int, 
+#     num_train: int, 
+#     input_window: int, 
+#     output_window: int,
+#     device, 
+#     train_percentage=0.7):
+#     """Prepares a training and a validation dataset from scratch
 
-    Returns:
-        x: Torch DataLoader with training split
-        y: Torch loader with validation split
-    """
-    if num_train is None:
-        samples = int(len(data) * train_percentage)
-        end = len(data)
-    else:
-        samples = num_train
-        end = int((1-train_percentage) * num_train) + num_train
-    train_data = data[:samples]
-    val_data = data[samples:end]
+#     Args:
+#         data (list): _description_
+#         batch_size (int): _description_
+#         num_train (int): _description_
+#         input_window (int): _description_
+#         output_window (int): _description_
+#         train_percentage (float, optional): _description_. Defaults to 0.7.
 
-    train_sequence_x, train_sequence_y = create_sequences(train_data, input_window, output_window)
-    val_sequence_x, val_sequence_y = create_sequences(val_data, input_window, output_window)
+#     Returns:
+#         x: Torch DataLoader with training split
+#         y: Torch loader with validation split
+#     """
+#     if num_train is None:
+#         samples = int(len(data) * train_percentage)
+#         end = len(data)
+#     else:
+#         samples = num_train
+#         end = int((1-train_percentage) * num_train) + num_train
+#     train_data = data[:samples]
+#     val_data = data[samples:end]
 
-    train_loader = DataLoader(
-        SequenceDataset(train_sequence_x, train_sequence_y, device, input_noise=False), 
-        batch_size=batch_size, 
-        shuffle=True)
-    val_loader = DataLoader(
-        SequenceDataset(val_sequence_x, val_sequence_y, device, input_noise=False), 
-        batch_size=batch_size, 
-        shuffle=True)
-    return train_loader, val_loader
+#     train_sequence_x, train_sequence_y = create_sequences(train_data, input_window, output_window)
+#     val_sequence_x, val_sequence_y = create_sequences(val_data, input_window, output_window)
+
+#     train_loader = DataLoader(
+#         SequenceDataset(train_sequence_x, train_sequence_y, device, input_noise=False), 
+#         batch_size=batch_size, 
+#         shuffle=True)
+#     val_loader = DataLoader(
+#         SequenceDataset(val_sequence_x, val_sequence_y, device, input_noise=False), 
+#         batch_size=batch_size, 
+#         shuffle=True)
+#     return train_loader, val_loader
 
 
 def data_generator(data_path, config):
