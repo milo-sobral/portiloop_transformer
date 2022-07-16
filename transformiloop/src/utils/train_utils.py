@@ -55,37 +55,53 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
     all_targets = []
 
     classification_criterion = nn.BCEWithLogitsLoss()
+    nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['temperature'],
+                                        config['use_cosine_similarity'])
 
-    for batch_idx, (seq, freq, labels, seq_aug, freq_aug) in enumerate(dataloader):
+    for batch_idx, (seqs, freqs, labels, seq_augs, freq_augs) in enumerate(dataloader):
         if batch_idx > limit:
             break
 
         # Set up data
-        seq, freq = seq.float().to(device), freq.float().to(device)
-        seq_aug, freq_aug = seq_aug.float().to(device), freq_aug.float().to(device)
+        seqs, freqs = seqs.float().to(device), freqs.float().to(device)
+        seq_augs, freq_augs = seq_augs.float().to(device), freq_augs.float().to(device)
 
         model_optim.zero_grad()
         classifier_optim.zero_grad()
 
-        # Run throuhg model
-        h_t, z_t, h_f, z_f = model(seq, freq)
-        h_t_aug, z_t_aug, h_f_aug, z_f_aug=model(seq_aug, freq_aug)
+        loss_c = None
 
-        nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['temperature'],
-                                       config['use_cosine_similarity'])
-        loss_t = nt_xent_criterion(h_t, h_t_aug)
-        loss_f = nt_xent_criterion(h_f, h_f_aug)
-        l_TF = nt_xent_criterion(z_t, z_f)
-        l_1, l_2, l_3 = nt_xent_criterion(z_t, z_f_aug), nt_xent_criterion(z_t_aug, z_f), nt_xent_criterion(z_t_aug,
-                                                                                                            z_f_aug)
-        loss_c = (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
+        encoded = []
+        # Run through encoder model
+        for i in range(seqs.size(2)):
+            seq = seqs[:, :, i, :]
+            freq = freqs[:, :, i, :]
+            seq_aug = seq_augs[:, :, i, :]
+            freq_aug = freq_augs[:, :, i, :]
 
+            h_t, z_t, h_f, z_f = model(seq, freq)
+            h_t_aug, z_t_aug, h_f_aug, z_f_aug=model(seq_aug, freq_aug)
+
+            loss_t = nt_xent_criterion(h_t, h_t_aug)
+            loss_f = nt_xent_criterion(h_f, h_f_aug)
+            l_TF = nt_xent_criterion(z_t, z_f)
+            l_1, l_2, l_3 = nt_xent_criterion(z_t, z_f_aug), nt_xent_criterion(z_t_aug, z_f), nt_xent_criterion(z_t_aug, z_f_aug)
+                
+            if loss_c is None:                                                                                             
+                loss_c = (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
+            else:
+                loss_c += (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
+
+            fea_concat = torch.cat((z_t, z_f), dim=1)
+            encoded.append(fea_concat)
+        
         # Run through classifier
-        fea_concat = torch.cat((z_t, z_f), dim=1)
-        logits = classifier(fea_concat).squeeze(-1) # how to define classifier? MLP? CNN?
+        encoded = torch.stack(encoded, dim=2) # ????? Dimension probably wrong here, need to stack based on dimension of sequence
+        logits = classifier(encoded).squeeze(-1) # how to define classifier? MLP? CNN?
         loss_p = classification_criterion(logits, labels.to(device)) # predictor loss, actually, here is training loss
 
         # Final loss taking into account all portions
+        loss_c /= seqs.size(2)
         lam = 0.2
         loss =  loss_p + (1-lam) * loss_c + lam * (loss_t + loss_f)
 

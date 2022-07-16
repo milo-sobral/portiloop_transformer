@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.fft as fft
 import random
-from transformiloop.data.augmentations import DataTransform_TD, DataTransform_FD
+from transformiloop.src.data.augmentations import DataTransform_TD, DataTransform_FD
 
 
 def get_subject_list(config):
@@ -122,23 +122,18 @@ class RandomSampler(Sampler):
       nb_batch (int, optional): number of iteration before end of __iter__(), this defaults to len(data_source)
     """
 
-    def __init__(self, idx_true, idx_false, batch_size, distribution_mode, nb_batch):
+    def __init__(self, idx_true, idx_false, config):
         self.idx_true = idx_true
         self.idx_false = idx_false
         self.nb_true = self.idx_true.size
         self.nb_false = self.idx_false.size
-        self.length = nb_batch * batch_size
-        self.distribution_mode = distribution_mode
+        self.length = config['training_batches'] * config['batch_size']
 
     def __iter__(self):
         global precision_validation_factor
         global recall_validation_factor
         cur_iter = 0
-        # epsilon = 1e-7 proba = float(0.5 + 0.5 * (precision_validation_factor - recall_validation_factor) / (precision_validation_factor +
-        # recall_validation_factor + epsilon))
         proba = 0.5
-        if self.distribution_mode == 1:
-            proba = 1
 
         while cur_iter < self.length:
             cur_iter += 1
@@ -151,6 +146,49 @@ class RandomSampler(Sampler):
                 idx_res = self.idx_false[idx_file]
 
             yield idx_res
+
+    def __len__(self):
+        return self.length
+
+def get_dataloaders(config):
+    subs_train, subs_val, subs_test = get_subject_list(config['MODA_data_config'])
+    train_ds = FinetuneDataset(subs_train, config['MODA_data_config'], augmentation_config=config['augmentation_config'])
+    val_ds = FinetuneDataset(subs_val, config['MODA_data_config'], augmentation_config=config['augmentation_config'])
+    test_ds = FinetuneDataset(subs_test, config['MODA_data_config'], augmentation_config=config['augmentation_config'])
+
+    idx_true, idx_false = get_class_idxs(train_ds, 0)
+
+    train_sampler = RandomSampler(idx_true, idx_false, config['MODA_data_config'])
+
+    train_dl = DataLoader(
+        train_ds, 
+        batch_size=config['MODA_data_config']['batch_size'],
+        sampler=train_sampler,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=True)
+    
+    val_dl = DataLoader(
+        val_ds, 
+        batch_size=config['MODA_data_config']['batch_size'],
+        # sampler=train_sampler,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=True)
+
+    test_dl = DataLoader(
+        test_ds, 
+        batch_size=config['MODA_data_config']['batch_size'],
+        # sampler=train_sampler,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=True)
+
+    return train_dl, val_dl, test_dl
+
 
     def __len__(self):
         return self.length

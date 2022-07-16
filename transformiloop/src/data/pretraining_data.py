@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
-from transformiloop.data.augmentations import DataTransform_FD, DataTransform_TD
+from transformiloop.src.data.augmentations import DataTransform_FD, DataTransform_TD
 import torch.fft as fft
 
 

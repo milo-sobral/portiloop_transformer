@@ -1,6 +1,6 @@
 from torch import tensor
 import torch.nn as nn
-from transformiloop.models.helper_models import TransformerExtractor, MLPLatent, SeqRecCNN
+from transformiloop.src.models.helper_models import TransformerExtractor, MLPLatent, SeqRecCNN
 
 class ClassificationModel(nn.Module):
     def __init__(
@@ -9,9 +9,7 @@ class ClassificationModel(nn.Module):
         n_heads: int, 
         dim_hidden: int,
         n_layers: int, 
-        num_classes: int, 
         seq_len: int, 
-        latent_dim: int, 
         device,
         dropout: float = 0.5):
         """Prediction module to build models used for pretraining on EEG data.

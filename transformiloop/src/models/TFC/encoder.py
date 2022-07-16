@@ -29,10 +29,10 @@ class TFC(nn.Module): # Frequency domain encoder
         )
 
         self.projector_t = nn.Sequential(
-            nn.Linear(config['CNNoutput_channel'] * config['final_out_channels'], 256),
-            nn.BatchNorm1d(256),
+            nn.Linear(config['CNNoutput_channel'] * config['final_out_channels'], config['d_model'] * 2),
+            nn.BatchNorm1d(config['d_model'] * 2),
             nn.ReLU(),
-            nn.Linear(256, 128)
+            nn.Linear(config['d_model'] * 2, config['d_model'])
         )
 
         self.conv_block1_f = nn.Sequential(
@@ -59,10 +59,10 @@ class TFC(nn.Module): # Frequency domain encoder
         )
 
         self.projector_f = nn.Sequential(
-            nn.Linear(config['CNNoutput_channel'] * config['final_out_channels'], 256),
-            nn.BatchNorm1d(256),
+            nn.Linear(config['CNNoutput_channel'] * config['final_out_channels'], config['d_model'] * 2),
+            nn.BatchNorm1d(config['d_model'] * 2),
             nn.ReLU(),
-            nn.Linear(256, 128)
+            nn.Linear(config['d_model'] * 2, config['d_model'])
         )
 
 

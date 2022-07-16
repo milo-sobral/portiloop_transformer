@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 
-
 def one_hot_encoding(X):
     X = [int(x) for x in X]
     n_values = np.max(X) + 1
