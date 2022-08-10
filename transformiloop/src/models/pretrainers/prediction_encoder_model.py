@@ -1,6 +1,6 @@
 from torch import tensor
 import torch.nn as nn
-from transformiloop.models.helper_models import TransformerExtractor, MLPLatent, SeqRecCNN
+from transformiloop.src.models.helper_models import TransformerExtractor, MLPLatent, SeqRecCNN
 
 class PredictionModel(nn.Module):
     def __init__(

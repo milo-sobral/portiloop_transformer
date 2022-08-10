@@ -17,11 +17,12 @@ training_config = {
 }
 
 transformer_config = {
-    'd_model': 256,
+    'd_model': 128,
     'n_heads': 8,
     'dim_hidden': 1024,
     'n_layers': 6,
     'latent_dim': 32,
+    'dropout': 0.1
 }
 
 pretraining_data_config = {
@@ -59,9 +60,11 @@ encoder_config = {
     'kernel_size': 8, 
     'stride': 1,
     'final_out_channels': 128,
-    'CNNoutput_channel': 66,
+    'CNNoutput_channel': 32,
     'dropout': 0.35,
-    'd_model': 256,
+    'd_model': 128,
+    'temperature': 0.2,
+    'use_cosine_similarity': True
 }
 
 DEFAULT_CONFIG = {
@@ -69,6 +72,7 @@ DEFAULT_CONFIG = {
     'batch_size' : 64,
     'seq_len': 256,
     'out_seq_len': 64,
+    'threshold': 0.5, 
 
     # Subconfigs
     'training': training_config,
@@ -82,7 +86,5 @@ DEFAULT_CONFIG = {
     'task': 'both',
     'mode': 'classification',
     'recreate': None,
-    'temperature': 0.2,
-    'use_cosine_similarity': True
 }
 

@@ -44,7 +44,7 @@ import copy
 #     return nn.Sequential(new_encoder, new_latent, classifier)
 
 def get_encoder_classifier_TFC(config):
-    classifier = ClassificationModel(config['transformer_config']) 
+    classifier = ClassificationModel(config) 
     encoder = TFC(config['encoder_config'])
     return classifier, encoder
     

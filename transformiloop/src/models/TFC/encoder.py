@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 
+
 class TFC(nn.Module): # Frequency domain encoder
     def __init__(self, config):
         super(TFC, self).__init__()
@@ -10,7 +11,7 @@ class TFC(nn.Module): # Frequency domain encoder
                       stride=config['stride'], bias=False, padding=(config['kernel_size']//2)),
             nn.BatchNorm1d(32),
             nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, stride=2, padding=1),
+            nn.MaxPool1d(kernel_size=2, stride=2, padding=0),
             nn.Dropout(config['dropout'])
         )
 
@@ -18,21 +19,21 @@ class TFC(nn.Module): # Frequency domain encoder
             nn.Conv1d(32, 64, kernel_size=8, stride=1, bias=False, padding=4),
             nn.BatchNorm1d(64),
             nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, stride=2, padding=1)
+            nn.MaxPool1d(kernel_size=2, stride=2, padding=0)
         )
 
         self.conv_block3_t = nn.Sequential(
             nn.Conv1d(64, config['final_out_channels'], kernel_size=8, stride=1, bias=False, padding=4),
             nn.BatchNorm1d(config['final_out_channels']),
             nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, stride=2, padding=1),
+            nn.MaxPool1d(kernel_size=2, stride=2, padding=0),
         )
 
         self.projector_t = nn.Sequential(
             nn.Linear(config['CNNoutput_channel'] * config['final_out_channels'], config['d_model'] * 2),
             nn.BatchNorm1d(config['d_model'] * 2),
             nn.ReLU(),
-            nn.Linear(config['d_model'] * 2, config['d_model'])
+            nn.Linear(config['d_model'] * 2, config['d_model'] // 2)
         )
 
         self.conv_block1_f = nn.Sequential(
@@ -40,7 +41,7 @@ class TFC(nn.Module): # Frequency domain encoder
                       stride=config['stride'], bias=False, padding=(config['kernel_size'] // 2)),
             nn.BatchNorm1d(32),
             nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, stride=2, padding=1),
+            nn.MaxPool1d(kernel_size=2, stride=2, padding=0),
             nn.Dropout(config['dropout'])
         )
 
@@ -48,21 +49,21 @@ class TFC(nn.Module): # Frequency domain encoder
             nn.Conv1d(32, 64, kernel_size=8, stride=1, bias=False, padding=4),
             nn.BatchNorm1d(64),
             nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, stride=2, padding=1)
+            nn.MaxPool1d(kernel_size=2, stride=2, padding=0)
         )
 
         self.conv_block3_f = nn.Sequential(
             nn.Conv1d(64, config['final_out_channels'], kernel_size=8, stride=1, bias=False, padding=4),
             nn.BatchNorm1d(config['final_out_channels']),
             nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, stride=2, padding=1),
+            nn.MaxPool1d(kernel_size=2, stride=2, padding=0),
         )
 
         self.projector_f = nn.Sequential(
             nn.Linear(config['CNNoutput_channel'] * config['final_out_channels'], config['d_model'] * 2),
             nn.BatchNorm1d(config['d_model'] * 2),
             nn.ReLU(),
-            nn.Linear(config['d_model'] * 2, config['d_model'])
+            nn.Linear(config['d_model'] * 2, config['d_model'] // 2)
         )
 
 
@@ -73,7 +74,6 @@ class TFC(nn.Module): # Frequency domain encoder
         x = self.conv_block2_t(x)
         x = self.conv_block3_t(x)
         h_time = x.reshape(x.shape[0], -1)
-
         """Cross-space projector"""
         z_time = self.projector_t(h_time)
 

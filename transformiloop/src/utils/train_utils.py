@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from transformiloop.models.TFC.losses import NTXentLoss_poly
+from transformiloop.src.models.TFC.losses import NTXentLoss_poly
 import torch.nn as nn
 
 
@@ -24,8 +24,8 @@ def pretrain_epoch(model, model_optimizer, train_loader, config, device):
 
         """Compute Pre-train loss"""
         """NTXentLoss: normalized temperature-scaled cross entropy loss. From SimCLR"""
-        nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['temperature'],
-                                       config['use_cosine_similarity'])
+        nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['encoder_config']['temperature'],
+                                       config['encoder_config']['use_cosine_similarity'])
 
         loss_t = nt_xent_criterion(h_t, h_t_aug)
         loss_f = nt_xent_criterion(h_f, h_f_aug)
@@ -55,8 +55,8 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
     all_targets = []
 
     classification_criterion = nn.BCEWithLogitsLoss()
-    nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['temperature'],
-                                        config['use_cosine_similarity'])
+    nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['encoder_config']['temperature'],
+                                        config['encoder_config']['use_cosine_similarity'])
 
     for batch_idx, (seqs, freqs, labels, seq_augs, freq_augs) in enumerate(dataloader):
         if batch_idx > limit:
@@ -72,15 +72,16 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
         loss_c = None
 
         encoded = []
+
         # Run through encoder model
-        for i in range(seqs.size(2)):
-            seq = seqs[:, :, i, :]
-            freq = freqs[:, :, i, :]
+        for i in range(seqs.size(1)):
+            seq = seqs[:, i, :].unsqueeze(1)
+            freq = freqs[:, i, :].unsqueeze(1)
             seq_aug = seq_augs[:, :, i, :]
             freq_aug = freq_augs[:, :, i, :]
 
             h_t, z_t, h_f, z_f = model(seq, freq)
-            h_t_aug, z_t_aug, h_f_aug, z_f_aug=model(seq_aug, freq_aug)
+            h_t_aug, z_t_aug, h_f_aug, z_f_aug = model(seq_aug, freq_aug)
 
             loss_t = nt_xent_criterion(h_t, h_t_aug)
             loss_f = nt_xent_criterion(h_f, h_f_aug)
@@ -96,12 +97,12 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
             encoded.append(fea_concat)
         
         # Run through classifier
-        encoded = torch.stack(encoded, dim=2) # ????? Dimension probably wrong here, need to stack based on dimension of sequence
-        logits = classifier(encoded).squeeze(-1) # how to define classifier? MLP? CNN?
+        encoded = torch.stack(encoded, dim=1) # ????? Dimension probably wrong here, need to stack based on dimension of sequence
+        logits = classifier(encoded).squeeze(-1) # Run trhough transformer model
         loss_p = classification_criterion(logits, labels.to(device)) # predictor loss, actually, here is training loss
 
         # Final loss taking into account all portions
-        loss_c /= seqs.size(2)
+        loss_c /= seqs.size(1)
         lam = 0.2
         loss =  loss_p + (1-lam) * loss_c + lam * (loss_t + loss_f)
 

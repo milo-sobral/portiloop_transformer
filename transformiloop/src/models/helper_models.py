@@ -2,7 +2,7 @@ import torch.nn as nn
 from einops import rearrange, repeat
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
-from transformiloop.models.embedding_models import PositionalEncoding
+from transformiloop.src.models.embedding_models import PositionalEncoding
 
 
 class TransformerExtractor(nn.Module):
@@ -38,8 +38,8 @@ class TransformerExtractor(nn.Module):
             output Tensor of shape [batch_size, out_seq_len, d_model]
         '''
         # Add positional encoding
-        x = repeat(x, 'b s -> b s e', e=1)
-        x = self.embedder(x)
+        # x = repeat(x, 'b s -> b s e', e=1)
+        # x = self.embedder(x)
         x = rearrange(x, 'b s e -> s b e')
         x = self.pos_encoder(x)
         x = rearrange(x, 's b e -> b s e')
