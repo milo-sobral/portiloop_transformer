@@ -35,8 +35,9 @@ def get_subject_list(config):
     return train_subject, validation_subject, test_subject
 
 class FinetuneDataset(Dataset):
-    def __init__(self, list_subject, config, augmentation_config=None):
+    def __init__(self, list_subject, config, augmentation_config=None, device=None):
         self.fe = config['fe']
+        self.device = device
         self.window_size = config['window_size']
         self.augmentation_config = augmentation_config
         self.data = pd.read_csv(config['data_path'], header=None).to_numpy()
@@ -77,7 +78,7 @@ class FinetuneDataset(Dataset):
             aug1 = DataTransform_TD(x_data.unsqueeze(0), self.augmentation_config).squeeze(1)
             aug1_f = DataTransform_FD(x_data_f.unsqueeze(0)).squeeze(1)
 
-        return x_data, x_data_f, label, aug1, aug1_f
+        return x_data.to(self.device), x_data_f.to(self.device), label.to(self.device), aug1.to(self.device), aug1_f.to(self.device)
 
     def is_spindle(self, idx):
         assert 0 <= idx <= len(self), f"Index out of range ({idx}/{len(self)})."
@@ -144,7 +145,8 @@ class RandomSampler(Sampler):
             else:  # sample false
                 idx_file = random.randint(0, self.nb_false - 1)
                 idx_res = self.idx_false[idx_file]
-
+            
+            # print('Sampled at index {}'.format(idx_res))
             yield idx_res
 
     def __len__(self):
@@ -152,9 +154,9 @@ class RandomSampler(Sampler):
 
 def get_dataloaders(config):
     subs_train, subs_val, subs_test = get_subject_list(config['MODA_data_config'])
-    train_ds = FinetuneDataset(subs_train, config['MODA_data_config'], augmentation_config=config['augmentation_config'])
-    val_ds = FinetuneDataset(subs_val, config['MODA_data_config'], augmentation_config=config['augmentation_config'])
-    test_ds = FinetuneDataset(subs_test, config['MODA_data_config'], augmentation_config=config['augmentation_config'])
+    train_ds = FinetuneDataset(subs_train, config['MODA_data_config'], augmentation_config=config['augmentation_config'], device=config['device'])
+    val_ds = FinetuneDataset(subs_val, config['MODA_data_config'], augmentation_config=None, device=config['device'])
+    test_ds = FinetuneDataset(subs_test, config['MODA_data_config'], augmentation_config=None, device=config['device'])
 
     idx_true, idx_false = get_class_idxs(train_ds, 0)
 
@@ -166,25 +168,25 @@ def get_dataloaders(config):
         sampler=train_sampler,
         shuffle=False,
         num_workers=0,
-        pin_memory=True,
+        pin_memory=False,
         drop_last=True)
     
     val_dl = DataLoader(
         val_ds, 
-        batch_size=config['MODA_data_config']['batch_size'],
+        batch_size = 6400,#config['MODA_data_config']['batch_size'],
         # sampler=train_sampler,
-        shuffle=False,
+        shuffle=True,
         num_workers=0,
-        pin_memory=True,
+        pin_memory=False,
         drop_last=True)
 
     test_dl = DataLoader(
         test_ds, 
         batch_size=config['MODA_data_config']['batch_size'],
         # sampler=train_sampler,
-        shuffle=False,
+        shuffle=True,
         num_workers=0,
-        pin_memory=True,
+        pin_memory=False,
         drop_last=True)
 
     return train_dl, val_dl, test_dl

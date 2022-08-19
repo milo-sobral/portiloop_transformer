@@ -2,10 +2,25 @@ import torch
 import numpy as np
 from transformiloop.src.models.TFC.losses import NTXentLoss_poly
 import torch.nn as nn
+import os
+import json
+
+def save_model(save_path, model, config):
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    not_saveable_keys = ['device', 'optimizer', 'scheduler', 'loss_func', 'classifier_optimizer']
+    saveable_config = {key: val for (key, val) in config.items() if key not in not_saveable_keys}
+    print(saveable_config)
+    with open(os.path.join(save_path, 'config.json'), 'w') as f:
+        json.dump(saveable_config, f)
+    torch.save(model.state_dict(), os.path.join(save_path, "model"))
 
 
 def pretrain_epoch(model, model_optimizer, train_loader, config, device):
     total_loss = []
+    losses_t = []
+    losses_f = []
+    losses_c = []
     model.train()
 
     for batch_idx, (data, aug1, data_f, aug1_f) in enumerate(train_loader):
@@ -34,16 +49,23 @@ def pretrain_epoch(model, model_optimizer, train_loader, config, device):
         l_1, l_2, l_3 = nt_xent_criterion(z_t, z_f_aug), nt_xent_criterion(z_t_aug, z_f), nt_xent_criterion(z_t_aug, z_f_aug)
         loss_c = (1+ l_TF -l_1) + (1+ l_TF -l_2) + (1+ l_TF -l_3)
 
-        lam = 0.2
-        loss = lam *(loss_t + loss_f) + (1- lam)*loss_c
+        lam = 0.3
+        loss = lam * (loss_t + loss_f) + (1- lam)*loss_c
 
+        losses_t.append(loss_t.item())
+        losses_f.append(loss_f.item())
+        losses_c.append(loss_c.item())
         total_loss.append(loss.item())
         loss.backward()
         model_optimizer.step()
         if batch_idx % 100 == 0:
             print('pre-training: overall loss:{}, l_t: {}, l_f:{}, l_c:{}'.format(loss, loss_t, loss_f, loss_c)) 
     total_loss = torch.tensor(total_loss).mean()
-    return total_loss
+    loss_t = torch.tensor(losses_t).mean()
+    loss_f = torch.tensor(losses_f).mean()
+    loss_c = torch.tensor(losses_c).mean()
+
+    return total_loss, loss_t, loss_f, loss_c
 
 
 def finetune_epoch(model, model_optim, dataloader, config, device, classifier, classifier_optim, limit):
@@ -70,11 +92,14 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
         classifier_optim.zero_grad()
 
         loss_c = None
+        loss_t = None
+        loss_f = None
 
         encoded = []
 
         # Run through encoder model
         for i in range(seqs.size(1)):
+            # print(torch.cuda.memory_allocated(0))
             seq = seqs[:, i, :].unsqueeze(1)
             freq = freqs[:, i, :].unsqueeze(1)
             seq_aug = seq_augs[:, :, i, :]
@@ -83,15 +108,17 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
             h_t, z_t, h_f, z_f = model(seq, freq)
             h_t_aug, z_t_aug, h_f_aug, z_f_aug = model(seq_aug, freq_aug)
 
-            loss_t = nt_xent_criterion(h_t, h_t_aug)
-            loss_f = nt_xent_criterion(h_f, h_f_aug)
             l_TF = nt_xent_criterion(z_t, z_f)
             l_1, l_2, l_3 = nt_xent_criterion(z_t, z_f_aug), nt_xent_criterion(z_t_aug, z_f), nt_xent_criterion(z_t_aug, z_f_aug)
                 
             if loss_c is None:                                                                                             
                 loss_c = (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
+                loss_t = nt_xent_criterion(h_t, h_t_aug)
+                loss_f = nt_xent_criterion(h_f, h_f_aug)
             else:
                 loss_c += (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
+                loss_t += nt_xent_criterion(h_t, h_t_aug).item()
+                loss_f += nt_xent_criterion(h_f, h_f_aug).item()
 
             fea_concat = torch.cat((z_t, z_f), dim=1)
             encoded.append(fea_concat)
@@ -103,6 +130,8 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
 
         # Final loss taking into account all portions
         loss_c /= seqs.size(1)
+        loss_t /= seqs.size(1)
+        loss_f /= seqs.size(1)
         lam = 0.2
         loss =  loss_p + (1-lam) * loss_c + lam * (loss_t + loss_f)
 
@@ -116,40 +145,51 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
         classifier_optim.step()
         total_loss.append(loss.cpu().item())
 
-    acc, f1, recall, precision = compute_metrics(torch.stack(all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
-    print(f"Accuracy: {acc*100}\nF1-score: {f1*100}\nRecall: {recall*100}\nPrecision: {precision*100}")
-    return torch.tensor(total_loss).mean(), acc, f1, recall, precision
+        if batch_idx % 100 == 0:
+            print('Finetuning: overall loss:{}, loss_pred: {}, l_t: {}, l_f:{}, l_c:{}'.format(loss, loss_p, loss_t, loss_f, loss_c)) 
 
-def finetune_test_epoch(model, dataloader, config, classifier, limit, device):
+    acc, f1, recall, precision, cm = compute_metrics(torch.stack(all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+    print(f"Accuracy: {acc*100}\nF1-score: {f1*100}\nRecall: {recall*100}\nPrecision: {precision*100}")
+    return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
+
+def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
     model.eval()
     classifier.eval()
 
     all_preds = []
     all_targets = []
 
-    for batch_idx, (seq, freq, labels, seq_aug, freq_aug) in enumerate(dataloader):
+    for batch_idx, (seqs, freqs, labels, seq_augs, freq_augs) in enumerate(dataloader):
         if batch_idx > limit:
             break
         # Run throuhg model
         with torch.no_grad():
-            seq, freq = seq.float().to(device), freq.float().to(device)
-            seq_aug, freq_aug = seq_aug.float().to(device), freq_aug.float().to(device)
+            encoded = []
 
-            _ , z_t, _, z_f = model(seq, freq)
-            _, _, _, _ = model(seq_aug, freq_aug)
+            seqs, freqs = seqs.float().to(device), freqs.float().to(device)
 
+        # Run through encoder model
+            for i in range(seqs.size(1)):
+                seq = seqs[:, i, :].unsqueeze(1)
+                freq = freqs[:, i, :].unsqueeze(1)
+
+                _ , z_t, _, z_f = model(seq, freq)
+                # _, _, _, _ = model(seq_aug, freq_aug)
+           
+                fea_concat = torch.cat((z_t, z_f), dim=1)
+                encoded.append(fea_concat)
+            
+            encoded = torch.stack(encoded, dim=1)
             # Run through classifier
-            fea_concat = torch.cat((z_t, z_f), dim=1)
-            logits = classifier(fea_concat).squeeze(-1) # how to define classifier? MLP? CNN?
-
+            logits = classifier(encoded).squeeze(-1) # how to define classifier? MLP? CNN?
             predictions = (torch.sigmoid(logits) > config['threshold']).int()       
             all_preds.append(predictions)
             all_targets.append(labels)
 
-    acc, f1, recall, precision = compute_metrics(torch.stack(all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
-    print(f"Accuracy: {acc*100}\nF1-score: {f1*100}\nRecall: {recall*100}\nPrecision: {precision*100}")
+    acc, f1, recall, precision, cm = compute_metrics(torch.stack(all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+    print(f"Accuracy: {acc*100}\nF1-score: {f1*100}\nRecall: {recall*100}\nPrecision: {precision*100}\nConfusion Matrix: {cm}")
 
-    return acc, f1, recall, precision
+    return acc, f1, recall, precision, cm
 
 
 def compute_metrics(predictions, targets):
@@ -164,6 +204,8 @@ def compute_metrics(predictions, targets):
     tp_sum = tp.sum().to(torch.float32).item()
     fp_sum = fp.sum().to(torch.float32).item()
     fn_sum = fn.sum().to(torch.float32).item()
+    tn_sum = tn.sum().to(torch.float32).item()
+    confusion_matrix = {'True Positive': tp_sum, 'False Positive': fp_sum, 'False Negative': fn_sum, 'True Negative': tn_sum}
     epsilon = 1e-7
 
     precision = tp_sum / (tp_sum + fp_sum + epsilon)
@@ -173,5 +215,5 @@ def compute_metrics(predictions, targets):
     
     accuracy = (sum(tp) + sum(tn)) / (sum(tp) + sum(tn) + sum(fn) + sum(fp))
 
-    return accuracy.mean(), f1, recall, precision
+    return accuracy.mean(), f1, recall, precision, confusion_matrix
 
