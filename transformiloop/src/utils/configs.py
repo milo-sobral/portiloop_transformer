@@ -2,6 +2,9 @@ import logging
 from copy import deepcopy
 from math import floor
 from random import choices, uniform, gauss
+import pathlib
+import os
+
 
 EPSILON_NOISE = 0.25 # Proportion of samples which are fully random
 
@@ -9,6 +12,7 @@ def get_default_config(name):
     DEFAULT_CONFIG['exp_name'] = name
     return DEFAULT_CONFIG
 
+DATASET_PATH = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
 
 DEFAULT_CONFIG = {
     # Data params
@@ -40,8 +44,8 @@ DEFAULT_CONFIG = {
     'num_datapoints': 100000,
 
     # Finetuning data config
-    'subjects_path': '/content/drive/Othercomputers/My Laptop/_Data/Portiloop/portiloop_software/dataset',
-    'data_path': '/content/drive/Othercomputers/My Laptop/_Data/Portiloop/portiloop_software/dataset/dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt',
+    'subjects_path': DATASET_PATH,
+    'data_path': os.path.join(DATASET_PATH, 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt'),
     'len_segment': 115 * 250,
     'fe': 250,
     'training_batches': 100000,
@@ -161,7 +165,7 @@ def sample_once(center=None, std=0.1):
             gaussian_mean=center[key], 
             gaussian_std_factor=std)
     return sample, sample_unrounded
-    
+
 def sample_from_range(range_t, gaussian_mean=None, gaussian_std_factor=0.1):
     """Sample one value from a key based on a range
 

@@ -25,8 +25,9 @@ from pareto_network_server_utils import Server, RECV_TIMEOUT_META_FROM_SERVER, S
     PORT_WORKER, SOCKET_TIMEOUT_CONNECT_WORKER, ACK_TIMEOUT_WORKER_TO_SERVER, IP_SERVER, ACK_TIMEOUT_META_TO_SERVER, select_and_send_or_close_socket, poll_and_recv_or_close_socket, get_connected_socket, LOOP_SLEEP_TIME_META, LOOP_SLEEP_TIME_WORKER, LOOP_SLEEP_TIME, SEND_ALIVE
 from pareto_search import LoggerWandbPareto, RUN_NAME, SurrogateModel, META_MODEL_DEVICE, train_surrogate, update_pareto, nb_parameters, MAX_NB_PARAMETERS, NB_SAMPLED_MODELS_PER_ITERATION, exp_max_pareto_efficiency, run, \
     load_network_files, dump_network_files, transform_config_dict_to_input, WANDB_PROJECT_PARETO, PARETO_ID
-# from portiloop_software.portiloop_python.ANN.training_experiment import initialize_dataset_config, initialize_exp_config
-# from portiloop_software.portiloop_python.Utils.utils import same_config_dict, sample_config_dict, MIN_NB_PARAMETERS, MAXIMIZE_F1_SCORE, PROFILE_META
+from transformiloop.src.utils.configs import compare_configs, sample_config_dict
+
+MAXIMIZE_F1_SCORE = True
 
 # META LEARNER: ==========================================
 
@@ -181,9 +182,9 @@ class MetaLearner:
                 self.__must_launch = False
                 self.__must_launch_lock.release()
 
-                if PROFILE_META:
-                    pro = Profiler()
-                    pro.start()
+                # if PROFILE_META:
+                #     pro = Profiler()
+                #     pro.start()
 
                 self.__results_lock.acquire()
                 temp_results = deepcopy(self.__results)
@@ -196,11 +197,11 @@ class MetaLearner:
                     to_remove = -1
                     to_update = -1
                     for i, exp in enumerate(launched_experiments):
-                        if same_config_dict(exp["config_dict"], res["config_dict"]):
+                        if compare_configs(exp["config_dict"], res["config_dict"]):
                             to_remove = i
                             break
                     for i, exp in enumerate(finished_experiments):
-                        if same_config_dict(exp["config_dict"], res["config_dict"]):
+                        if compare_configs(exp["config_dict"], res["config_dict"]):
                             to_update = i
                             break
 
@@ -249,15 +250,10 @@ class MetaLearner:
                     config_dict, unrounded = sample_config_dict(name=RUN_NAME + "_" + str(
                         num_experiment), previous_exp=prev_exp, all_exp=finished_experiments + launched_experiments + exps)
 
-                    nb_params = nb_parameters(config_dict)
-                    if nb_params > MAX_NB_PARAMETERS or nb_params < MIN_NB_PARAMETERS:
-                        continue
-
                     with torch.no_grad():
                         input = transform_config_dict_to_input(config_dict)
                         predicted_cost = meta_model(input).item()
 
-                    exp["cost_hardware"] = nb_params
                     exp["cost_software"] = predicted_cost
                     exp["config_dict"] = config_dict
                     exp["unrounded"] = unrounded
@@ -280,9 +276,9 @@ class MetaLearner:
                 launched_experiments.append(exp)
                 prev_exp = {}
 
-                if PROFILE_META:
-                    pro.stop()
-                    logging.debug(pro.output_text(unicode=False, color=False))
+                # if PROFILE_META:
+                #     pro.stop()
+                #     logging.debug(pro.output_text(unicode=False, color=False))
 
             else:
                 self.__must_launch_lock.release()
@@ -306,7 +302,8 @@ class Worker:
         self.__exp_to_run_lock = Lock()
 
         self.data_config = data_config
-        self.exp_config = initialize_exp_config()
+        # self.exp_config = initialize_exp_config()
+
 
         logging.debug(f"local IP: {self.local_ip}")
         logging.debug(f"public IP: {self.public_ip}")
@@ -467,8 +464,7 @@ if __name__ == "__main__":
         logging.basicConfig(
             format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG)
 
-    if args.worker:
-        dataset_config = initialize_dataset_config(
-            dataset_path=args.dataset_path)
+    # if args.worker:
+    #     dataset_config = initialize_dataset_config(dataset_path=args.dataset_path)
 
-    main(args, data_config=dataset_config)
+    main(args) #, data_config=dataset_config)

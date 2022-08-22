@@ -20,8 +20,9 @@ from torch.utils.data import DataLoader, Dataset
 import wandb
 
 # all constants (no hyperparameters here!)
-# from portiloop_software.portiloop_python.ANN.training_experiment import PortiloopNetwork, initialize_exp_config, run, initialize_dataset_config
-# from portiloop_software.portiloop_python.Utils.utils import EPSILON_EXP_NOISE, MAX_NB_PARAMETERS, MIN_NB_PARAMETERS, sample_config_dict, MAXIMIZE_F1_SCORE
+from portiloop_software.portiloop_python.ANN.training_experiment import PortiloopNetwork, initialize_exp_config, run, initialize_dataset_config
+from portiloop_software.portiloop_python.Utils.utils import EPSILON_EXP_NOISE, MAX_NB_PARAMETERS, MIN_NB_PARAMETERS, sample_config_dict, MAXIMIZE_F1_SCORE
+MAX_NB_PARAMETERS = 1000000
 
 THRESHOLD = 0.2
 WANDB_PROJECT_PARETO = "pareto-public"
