@@ -4,7 +4,7 @@ from math import floor
 from random import choices, uniform, gauss
 import pathlib
 import os
-
+import torch
 
 EPSILON_NOISE = 0.25 # Proportion of samples which are fully random
 
@@ -25,7 +25,7 @@ DEFAULT_CONFIG = {
     'd_model': 64,
     'n_heads': 4,
     'dim_hidden': 256,
-    'n_layers': 3,
+    'n_layers': 4,
     'latent_dim': 32,
 
     # Training params
@@ -37,6 +37,9 @@ DEFAULT_CONFIG = {
     'log_every': 100,
     'dropout': 0.5,
     'epochs': 200,
+    'es_epochs': 20,
+    'lam': 0.2,
+    'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
 
     # Pretraining data 
     'max_val_num': 3000,
@@ -77,6 +80,7 @@ SAMPLEABLE_DICT = {
     'n_layers': [1, 12, 1],
     'dropout': [0, 0.5, 0.1],
     'lr': [1e-6, 1e-3, 5e-6],
+    'lam': [0.1, 0.7, 0.01]
 }
 
 def sample_config_dict(exp_name, prev_exp, all_exps):
@@ -103,7 +107,7 @@ def sample_config_dict(exp_name, prev_exp, all_exps):
             sampled_config, sample_config_unrounded = sample_once(center=center)
         flag_in_exps = False
         for exp in all_exps:
-            compared_config = get_sampleable_from_config(exp)
+            compared_config = get_sampleable_from_config(exp['config_dict'])
             if compare_configs(compared_config, sampled_config):
                 flag_in_exps = True
                 logging.debug(f"DEBUG : config already tried = {compared_config}")
@@ -158,12 +162,19 @@ def sample_once(center=None, std=0.1):
     Returns:
         (dict, dict): Sampled dictionary and unrounded version of the same sample
     """
+    not_valid = True
     sample, sample_unrounded = {}, {}
-    for key in SAMPLEABLE_DICT.keys():
-        sample[key], sample_unrounded[key] = sample_from_range(
-            SAMPLEABLE_DICT[key], 
-            gaussian_mean=center[key], 
-            gaussian_std_factor=std)
+
+    while not_valid:
+        for key in SAMPLEABLE_DICT.keys():
+            sample[key], sample_unrounded[key] = sample_from_range(
+                SAMPLEABLE_DICT[key], 
+                gaussian_mean=(center[key] if center is not None else None), 
+                gaussian_std_factor=std)
+        
+        if sample['d_model'] % sample['n_heads'] == 0:
+            not_valid = False
+
     return sample, sample_unrounded
 
 def sample_from_range(range_t, gaussian_mean=None, gaussian_std_factor=0.1):

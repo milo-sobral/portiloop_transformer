@@ -17,15 +17,27 @@ import torch.nn as nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 
+from transformiloop.src.models.model_factory import get_encoder_classifier_TFC
+# from transformiloop.src.param_search.pareto_network import MAXIMIZE_F1_SCORE
+from transformiloop.src.utils.configs import get_default_config, SAMPLEABLE_DICT
+from transformiloop.src.utils.configs import sample_config_dict
+from transformiloop.src.utils.train import run
+
 import wandb
 
+
 # all constants (no hyperparameters here!)
-from portiloop_software.portiloop_python.ANN.training_experiment import PortiloopNetwork, initialize_exp_config, run, initialize_dataset_config
-from portiloop_software.portiloop_python.Utils.utils import EPSILON_EXP_NOISE, MAX_NB_PARAMETERS, MIN_NB_PARAMETERS, sample_config_dict, MAXIMIZE_F1_SCORE
-MAX_NB_PARAMETERS = 1000000
+# from portiloop_software.portiloop_python.ANN.training_experiment import PortiloopNetwork, initialize_exp_config, run, initialize_dataset_config
+# from portiloop_software.portiloop_python.Utils.utils import EPSILON_EXP_NOISE, MAX_NB_PARAMETERS, MIN_NB_PARAMETERS, sample_config_dict, MAXIMIZE_F1_SCORE
+MAX_NB_PARAMETERS = 3000000
+EPSILON_EXP_NOISE = 0.1
+MIN_NB_PARAMETERS = 500000
+
+MAXIMIZE_F1_SCORE = True
+
 
 THRESHOLD = 0.2
-WANDB_PROJECT_PARETO = "pareto-public"
+WANDB_PROJECT_PARETO = "Milo-DEBUG"
 
 path_dataset = Path(__file__).absolute().parent.parent.parent / 'dataset'
 path_pareto = Path(__file__).absolute().parent.parent.parent / 'pareto'
@@ -75,16 +87,17 @@ class MetaDataset(Dataset):
 
 
 def nb_parameters(config_dict):
-    net = PortiloopNetwork(config_dict)
-    res = sum(p.numel() for p in net.parameters())
-    del net
+    classifier, encoder = get_encoder_classifier_TFC(config_dict)
+    res = sum(p.numel() for p in classifier.parameters()) + sum(p.numel() for p in encoder.parameters())
+    del classifier
+    del encoder
     return res
 
 
 class SurrogateModel(nn.Module):
     def __init__(self):
         super(SurrogateModel, self).__init__()
-        nb_features = 10
+        nb_features = len(SAMPLEABLE_DICT.keys())
         coeff = 20
         self.fc1 = nn.Linear(in_features=nb_features,  # nb hyperparameters
                              out_features=nb_features * coeff)  # in SMBO paper : 25 * hyperparameters... Seems huge
@@ -157,25 +170,24 @@ def dominates_pareto(experiment, pareto):
 
 
 def transform_config_dict_to_input(config_dict):
-    x = [  # float(config_dict["seq_len"]),  # idk why, but needed
-        float(config_dict["nb_channel"]),
-        config_dict["hidden_size"],
-        int(config_dict["seq_stride_s"] * config_dict["fe"]),
-        config_dict["nb_rnn_layers"],
-        int(config_dict["window_size_s"] * config_dict["fe"]),
-        config_dict["nb_conv_layers"],
+    # x = [  # float(config_dict["seq_len"]),  # idk why, but needed
+        # float(config_dict["nb_channel"]),
+        # config_dict["hidden_size"],
+        # int(config_dict["seq_stride_s"] * config_dict["fe"]),
+        # config_dict["nb_rnn_layers"],
+        # int(config_dict["window_size_s"] * config_dict["fe"]),
+        # config_dict["nb_conv_layers"],
         # config_dict["stride_pool"],
         # config_dict["stride_conv"],
-        config_dict["kernel_conv"],
-        config_dict["kernel_pool"],
+        # config_dict["kernel_conv"],
+        # config_dict["kernel_pool"],
         # config_dict["dilation_conv"],
         # config_dict["dilation_pool"],
         # int(config_dict['RNN']),
         # int(config_dict['envelope_input']),
-        config_dict["lr_adam"],
-        config_dict["batch_size"]]
-    x = torch.tensor(x)
-    return x
+        # config_dict["lr_adam"],
+        # config_dict["batch_size"]]
+    return  torch.tensor([float(config_dict[key]) for key in config_dict.keys() if key in SAMPLEABLE_DICT.keys()])
 
 
 def train_surrogate(net, all_experiments):
@@ -461,7 +473,7 @@ class LoggerWandbPareto:
         self.wandb_run.finish()
 
 
-def iterative_training_local(data_config, exp_config):
+def iterative_training_local():
     logger = LoggerWandbPareto(RUN_NAME)
 
     all_experiments, pareto_front = load_network_files()
@@ -535,7 +547,7 @@ def iterative_training_local(data_config, exp_config):
         logging.debug("training...")
         # TODO: Get the dataconfig and the experiment config
         best_loss, best_f1_score, exp["best_epoch"] = run(
-            exp["config_dict"], data_config, exp_config, f"{WANDB_PROJECT_PARETO}_runs_{PARETO_ID}", save_model=False, unique_name=True)
+            exp["config_dict"], f"{WANDB_PROJECT_PARETO}_runs_{PARETO_ID}", save_model=False, unique_name=True) # TODO Change this!
         exp["cost_software"] = 1 - \
             best_f1_score if MAXIMIZE_F1_SCORE else best_loss
 
@@ -574,9 +586,6 @@ if __name__ == "__main__":
     parser.add_argument('--output_file', type=str, default=None)
     args = parser.parse_args()
 
-    data_config = initialize_dataset_config(
-        args.phase, path_dataset=Path(args.dataset_path) if args.dataset_path is not None else None)
-    exp_config = initialize_exp_config()
 
     if args.output_file is not None:
         logging.basicConfig(format='%(levelname)s: %(message)s',
@@ -585,4 +594,4 @@ if __name__ == "__main__":
         logging.basicConfig(
             format='%(levelname)s: %(message)s', level=logging.DEBUG)
 
-    iterative_training_local(data_config, exp_config)
+    iterative_training_local()

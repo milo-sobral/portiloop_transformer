@@ -1,7 +1,6 @@
 from torch import tensor
 import torch.nn as nn
-from transformiloop.src.models.helper_models import TransformerExtractor, MLPLatent, SeqRecCNN
-from transformiloop.src.utils.configs import MODA_data_config
+from transformiloop.src.models.helper_models import TransformerExtractor
 
 class ClassificationModel(nn.Module):
     def __init__(
@@ -24,13 +23,12 @@ class ClassificationModel(nn.Module):
         """
         super().__init__()
 
-        d_model = config['transformer_config']['d_model']
-        n_heads = config['transformer_config']['n_heads']
-        dim_hidden  = config['transformer_config']['dim_hidden']
-        n_layers = config['transformer_config']['n_layers']
-        seq_len = config['seq_len']
+        d_model = config['d_model']
+        n_heads = config['n_heads']
+        dim_hidden  = config['dim_hidden']
+        n_layers = config['n_layers']
         device = config['device']
-        dropout = config['transformer_config']['dropout']
+        dropout = config['dropout']
 
         self.transformer_extractor = TransformerExtractor(d_model=d_model,
                                                           n_heads=n_heads,
@@ -41,7 +39,7 @@ class ClassificationModel(nn.Module):
 
         # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
         self.flatten = nn.Flatten()
-        self.classifier = nn.Linear(d_model * config['MODA_data_config']['seq_len'], 1)
+        self.classifier = nn.Linear(d_model * config['seq_len'], 1)
 
     def forward(self, x: tensor):
         """_summary_
