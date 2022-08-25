@@ -53,6 +53,7 @@ DEFAULT_CONFIG = {
     'fe': 250,
     'training_batches': 100000,
     'validation_batches': 100000,
+    'seed': None,
 
     # Augmentation Config
     'jitter_scale_ratio': 1.5,

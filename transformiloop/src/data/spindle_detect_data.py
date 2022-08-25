@@ -17,10 +17,10 @@ def get_subject_list(config):
     p2_subject = pd.read_csv(os.path.join(config['subjects_path'], 'subject_sequence_p2_big.txt'), header=None, delim_whitespace=True).to_numpy()
 
     # Get splits for train, validation and test
-    train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.8, random_state=config['seed'])
-    test_subject_p1, validation_subject_p1 = train_test_split(validation_subject_p1, train_size=0.5, random_state=config['seed'])
-    train_subject_p2, validation_subject_p2 = train_test_split(p2_subject, train_size=0.8, random_state=config['seed'])
-    test_subject_p2, validation_subject_p2 = train_test_split(validation_subject_p2, train_size=0.5, random_state=config['seed'])
+    train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.8, random_state=None)
+    test_subject_p1, validation_subject_p1 = train_test_split(validation_subject_p1, train_size=0.5, random_state=None)
+    train_subject_p2, validation_subject_p2 = train_test_split(p2_subject, train_size=0.8, random_state=None)
+    test_subject_p2, validation_subject_p2 = train_test_split(validation_subject_p2, train_size=0.5, random_state=None)
 
     # Get subject list depending on split
     train_subject = np.array([s for s in all_subject if s[0] in train_subject_p1[:, 0] or s[0] in train_subject_p2[:, 0]]).squeeze()
@@ -153,18 +153,18 @@ class RandomSampler(Sampler):
         return self.length
 
 def get_dataloaders(config):
-    subs_train, subs_val, subs_test = get_subject_list(config['MODA_data_config'])
-    train_ds = FinetuneDataset(subs_train, config['MODA_data_config'], augmentation_config=config['augmentation_config'], device=config['device'])
-    val_ds = FinetuneDataset(subs_val, config['MODA_data_config'], augmentation_config=None, device=config['device'])
-    test_ds = FinetuneDataset(subs_test, config['MODA_data_config'], augmentation_config=None, device=config['device'])
+    subs_train, subs_val, subs_test = get_subject_list(config)
+    train_ds = FinetuneDataset(subs_train, config, augmentation_config=config, device=config['device'])
+    val_ds = FinetuneDataset(subs_val, config, augmentation_config=None, device=config['device'])
+    test_ds = FinetuneDataset(subs_test, config, augmentation_config=None, device=config['device'])
 
     idx_true, idx_false = get_class_idxs(train_ds, 0)
 
-    train_sampler = RandomSampler(idx_true, idx_false, config['MODA_data_config'])
+    train_sampler = RandomSampler(idx_true, idx_false, config)
 
     train_dl = DataLoader(
         train_ds, 
-        batch_size=config['MODA_data_config']['batch_size'],
+        batch_size=config['batch_size'],
         sampler=train_sampler,
         shuffle=False,
         num_workers=0,
@@ -173,7 +173,7 @@ def get_dataloaders(config):
     
     val_dl = DataLoader(
         val_ds, 
-        batch_size = 6400,#config['MODA_data_config']['batch_size'],
+        batch_size = 6400,#config['batch_size'],
         # sampler=train_sampler,
         shuffle=True,
         num_workers=0,
@@ -182,7 +182,7 @@ def get_dataloaders(config):
 
     test_dl = DataLoader(
         test_ds, 
-        batch_size=config['MODA_data_config']['batch_size'],
+        batch_size=config['batch_size'],
         # sampler=train_sampler,
         shuffle=True,
         num_workers=0,

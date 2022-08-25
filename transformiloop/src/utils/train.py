@@ -29,7 +29,6 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
     logging.debug(f"Config: {config}")
     logger = WandBLogger(wandb_group, config, wandb_project, experiment_name)
 
-
     # Load models
     classifier, encoder = get_encoder_classifier_TFC(config)
     logging.debug(summary(
@@ -61,13 +60,13 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
 
     config["optimizer"] = optim.Adam(
         encoder.parameters(),
-        config['training']["lr"],
-        config['training']["betas"])
+        config["lr"],
+        config["betas"])
 
     config['classifier_optimizer'] = optim.Adam(
         classifier.parameters(),
-        config['training']["lr"],
-        config['training']["betas"])
+        config["lr"],
+        config["betas"])
 
     config["scheduler"] = optim.lr_scheduler.StepLR(
         config["optimizer"],
