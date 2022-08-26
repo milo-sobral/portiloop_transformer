@@ -69,17 +69,11 @@ class TFC(nn.Module): # Frequency domain encoder
 
     def forward(self, x_in_t, x_in_f):
 
-        print(x_in_t.shape)
         """Time-based Contrastive Encoder"""
         x = self.conv_block1_t(x_in_t)
-        print(x.shape)
-        
         x = self.conv_block2_t(x)
         
-        print(x.shape)
         x = self.conv_block3_t(x)
-
-        print(x.shape)
 
         h_time = x.reshape(x.shape[0], -1)
         """Cross-space projector"""

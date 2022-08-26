@@ -29,9 +29,9 @@ import wandb
 # all constants (no hyperparameters here!)
 # from portiloop_software.portiloop_python.ANN.training_experiment import PortiloopNetwork, initialize_exp_config, run, initialize_dataset_config
 # from portiloop_software.portiloop_python.Utils.utils import EPSILON_EXP_NOISE, MAX_NB_PARAMETERS, MIN_NB_PARAMETERS, sample_config_dict, MAXIMIZE_F1_SCORE
-MAX_NB_PARAMETERS = 3000000
+MAX_NB_PARAMETERS = 2000000
 EPSILON_EXP_NOISE = 0.1
-MIN_NB_PARAMETERS = 500000
+MIN_NB_PARAMETERS = 100000
 
 MAXIMIZE_F1_SCORE = True
 
