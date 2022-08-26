@@ -4,6 +4,7 @@ import os
 import pprint
 import time
 from re import L
+import pathlib
 
 import torch
 import torch.optim as optim
@@ -22,6 +23,8 @@ from transformiloop.src.utils.train_utils import (finetune_epoch,
 def run(config, wandb_group, wandb_project, save_model, unique_name):
 
     time_start = time.time()
+    dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
+    # fi = os.path.join(DATASET_PATH, 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt')
 
     # Initialize WandB logging
     experiment_name = f"{config['exp_name']}_{time.time_ns()}" if unique_name else config['exp_name']
@@ -50,7 +53,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
     ))
 
     # Load data
-    train_dl, val_dl, test_dl = get_dataloaders(config)
+    train_dl, val_dl, test_dl = get_dataloaders(config, dataset_path)
     logging.debug(pprint.pprint(config))
 
     config['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -123,7 +126,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
                         'loss_validation': best_model_loss_validation,
                         'f1_score_validation': best_model_f1_score_validation,
                         'accuracy_validation': best_model_accuracy
-                    }, config['subjects_path'] / experiment_name, _use_new_zipfile_serialization=False)
+                    }, dataset_path / experiment_name, _use_new_zipfile_serialization=False)
 
         # Check if we have the best epoch
         if val_f1 > best_model_f1_score_validation:
@@ -167,10 +170,11 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
 
 
 class WandBLogger:
-    def __init__(self, group_name, config, project_name, experiment_name):
+    def __init__(self, group_name, config, project_name, experiment_name, dataset_path):
         self.best_model = None
         self.experiment_name = experiment_name
         self.config = config
+        self.dataset_path = dataset_path
         os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
         self.wandb_run = wandb.init(
             project=project_name,
@@ -202,14 +206,14 @@ class WandBLogger:
 
     def update_best_model(self):
         self.wandb_run.save(os.path.join(
-            self.config['subjects_path'],
+            self.dataset_path,
             self.experiment_name),
             policy="live",
-            base_path=self.self.config['subjects_path'])
+            base_path=self.dataset_path)
 
     def __del__(self):
         self.wandb_run.finish()
 
     def restore(self):
         self.wandb_run.restore(self.experiment_name,
-                               root=self.config['subjects_path'])
+                               root=self.dataset_path)

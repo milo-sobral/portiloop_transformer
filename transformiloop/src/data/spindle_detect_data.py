@@ -8,13 +8,14 @@ import torch.fft as fft
 import random
 from transformiloop.src.data.augmentations import DataTransform_TD, DataTransform_FD
 
+DATASET_FILE = 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt'
 
-def get_subject_list(config):
+def get_subject_list(config, dataset_path):
     # Load all subject files
-    all_subject = pd.read_csv(os.path.join(config['subjects_path'], "subject_sequence_full_big.txt"), header=None, delim_whitespace=True).to_numpy()
+    all_subject = pd.read_csv(os.path.join(dataset_path, "subject_sequence_full_big.txt"), header=None, delim_whitespace=True).to_numpy()
     test_subject = None
-    p1_subject = pd.read_csv(os.path.join(config['subjects_path'], 'subject_sequence_p1_big.txt'), header=None, delim_whitespace=True).to_numpy()
-    p2_subject = pd.read_csv(os.path.join(config['subjects_path'], 'subject_sequence_p2_big.txt'), header=None, delim_whitespace=True).to_numpy()
+    p1_subject = pd.read_csv(os.path.join(dataset_path, 'subject_sequence_p1_big.txt'), header=None, delim_whitespace=True).to_numpy()
+    p2_subject = pd.read_csv(os.path.join(dataset_path, 'subject_sequence_p2_big.txt'), header=None, delim_whitespace=True).to_numpy()
 
     # Get splits for train, validation and test
     train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.8, random_state=None)
@@ -35,12 +36,12 @@ def get_subject_list(config):
     return train_subject, validation_subject, test_subject
 
 class FinetuneDataset(Dataset):
-    def __init__(self, list_subject, config, augmentation_config=None, device=None):
+    def __init__(self, list_subject, config, dataset_path, augmentation_config=None, device=None):
         self.fe = config['fe']
         self.device = device
         self.window_size = config['window_size']
         self.augmentation_config = augmentation_config
-        self.data = pd.read_csv(config['data_path'], header=None).to_numpy()
+        self.data = pd.read_csv(os.path.join(dataset_path, DATASET_FILE), header=None).to_numpy()
         assert list_subject is not None
         used_sequence = np.hstack([range(int(s[1]), int(s[2])) for s in list_subject])
         split_data = np.array(np.split(self.data, int(len(self.data) / (config['len_segment'] + 30 * self.fe))))  # 115+30 = nb seconds per sequence in the dataset
@@ -152,11 +153,11 @@ class RandomSampler(Sampler):
     def __len__(self):
         return self.length
 
-def get_dataloaders(config):
-    subs_train, subs_val, subs_test = get_subject_list(config)
-    train_ds = FinetuneDataset(subs_train, config, augmentation_config=config, device=config['device'])
-    val_ds = FinetuneDataset(subs_val, config, augmentation_config=None, device=config['device'])
-    test_ds = FinetuneDataset(subs_test, config, augmentation_config=None, device=config['device'])
+def get_dataloaders(config, dataset_path):
+    subs_train, subs_val, subs_test = get_subject_list(config, dataset_path)
+    train_ds = FinetuneDataset(subs_train, config, dataset_path, augmentation_config=config, device=config['device'])
+    val_ds = FinetuneDataset(subs_val, config, dataset_path, augmentation_config=None, device=config['device'])
+    test_ds = FinetuneDataset(subs_test, config, dataset_path, augmentation_config=None, device=config['device'])
 
     idx_true, idx_false = get_class_idxs(train_ds, 0)
 

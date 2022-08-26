@@ -12,7 +12,6 @@ def get_default_config(name):
     DEFAULT_CONFIG['exp_name'] = name
     return DEFAULT_CONFIG
 
-DATASET_PATH = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
 
 DEFAULT_CONFIG = {
     # Data params
@@ -47,8 +46,8 @@ DEFAULT_CONFIG = {
     'num_datapoints': 100000,
 
     # Finetuning data config
-    'subjects_path': DATASET_PATH,
-    'data_path': os.path.join(DATASET_PATH, 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt'),
+    # 'subjects_path': DATASET_PATH,
+    # 'data_path': os.path.join(DATASET_PATH, 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt'),
     'len_segment': 115 * 250,
     'fe': 250,
     'training_batches': 100000,
