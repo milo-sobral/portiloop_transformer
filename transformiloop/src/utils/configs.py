@@ -75,9 +75,9 @@ SAMPLEABLE_DICT = {
     'seq_len': [16, 256, 16],
     'window_size': [16, 256, 16],
     'seq_stride': [16, 128, 16],
-    'n_heads': [1, 12, 1],
+    'n_heads': [1, 10, 1],
     'dim_hidden': [128, 2048, 16],
-    'n_layers': [1, 12, 1],
+    'n_layers': [1, 10, 1],
     'dropout': [0, 0.5, 0.1],
     'lr': [1e-6, 1e-3, 5e-6],
     'lam': [0.1, 0.7, 0.01]
