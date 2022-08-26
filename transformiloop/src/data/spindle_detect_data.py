@@ -8,19 +8,20 @@ import torch.fft as fft
 import random
 from transformiloop.src.data.augmentations import DataTransform_TD, DataTransform_FD
 
+DATASET_FILE = 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt'
 
-def get_subject_list(config):
+def get_subject_list(config, dataset_path):
     # Load all subject files
-    all_subject = pd.read_csv(os.path.join(config['subjects_path'], "subject_sequence_full_big.txt"), header=None, delim_whitespace=True).to_numpy()
+    all_subject = pd.read_csv(os.path.join(dataset_path, "subject_sequence_full_big.txt"), header=None, delim_whitespace=True).to_numpy()
     test_subject = None
-    p1_subject = pd.read_csv(os.path.join(config['subjects_path'], 'subject_sequence_p1_big.txt'), header=None, delim_whitespace=True).to_numpy()
-    p2_subject = pd.read_csv(os.path.join(config['subjects_path'], 'subject_sequence_p2_big.txt'), header=None, delim_whitespace=True).to_numpy()
+    p1_subject = pd.read_csv(os.path.join(dataset_path, 'subject_sequence_p1_big.txt'), header=None, delim_whitespace=True).to_numpy()
+    p2_subject = pd.read_csv(os.path.join(dataset_path, 'subject_sequence_p2_big.txt'), header=None, delim_whitespace=True).to_numpy()
 
     # Get splits for train, validation and test
-    train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.8, random_state=config['seed'])
-    test_subject_p1, validation_subject_p1 = train_test_split(validation_subject_p1, train_size=0.5, random_state=config['seed'])
-    train_subject_p2, validation_subject_p2 = train_test_split(p2_subject, train_size=0.8, random_state=config['seed'])
-    test_subject_p2, validation_subject_p2 = train_test_split(validation_subject_p2, train_size=0.5, random_state=config['seed'])
+    train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.8, random_state=None)
+    test_subject_p1, validation_subject_p1 = train_test_split(validation_subject_p1, train_size=0.5, random_state=None)
+    train_subject_p2, validation_subject_p2 = train_test_split(p2_subject, train_size=0.8, random_state=None)
+    test_subject_p2, validation_subject_p2 = train_test_split(validation_subject_p2, train_size=0.5, random_state=None)
 
     # Get subject list depending on split
     train_subject = np.array([s for s in all_subject if s[0] in train_subject_p1[:, 0] or s[0] in train_subject_p2[:, 0]]).squeeze()
@@ -35,12 +36,12 @@ def get_subject_list(config):
     return train_subject, validation_subject, test_subject
 
 class FinetuneDataset(Dataset):
-    def __init__(self, list_subject, config, augmentation_config=None, device=None):
+    def __init__(self, list_subject, config, dataset_path, augmentation_config=None, device=None):
         self.fe = config['fe']
         self.device = device
         self.window_size = config['window_size']
         self.augmentation_config = augmentation_config
-        self.data = pd.read_csv(config['data_path'], header=None).to_numpy()
+        self.data = pd.read_csv(os.path.join(dataset_path, DATASET_FILE), header=None).to_numpy()
         assert list_subject is not None
         used_sequence = np.hstack([range(int(s[1]), int(s[2])) for s in list_subject])
         split_data = np.array(np.split(self.data, int(len(self.data) / (config['len_segment'] + 30 * self.fe))))  # 115+30 = nb seconds per sequence in the dataset
@@ -76,7 +77,7 @@ class FinetuneDataset(Dataset):
         aug1, aug1_f = torch.zeros(x_data.shape), torch.zeros(x_data_f.shape)
         if self.augmentation_config is not None:
             aug1 = DataTransform_TD(x_data.unsqueeze(0), self.augmentation_config).squeeze(1)
-            aug1_f = DataTransform_FD(x_data_f.unsqueeze(0)).squeeze(1)
+            aug1_f = DataTransform_FD(x_data_f.unsqueeze(0), self.device).squeeze(1)
 
         return x_data.to(self.device), x_data_f.to(self.device), label.to(self.device), aug1.to(self.device), aug1_f.to(self.device)
 
@@ -152,19 +153,19 @@ class RandomSampler(Sampler):
     def __len__(self):
         return self.length
 
-def get_dataloaders(config):
-    subs_train, subs_val, subs_test = get_subject_list(config['MODA_data_config'])
-    train_ds = FinetuneDataset(subs_train, config['MODA_data_config'], augmentation_config=config['augmentation_config'], device=config['device'])
-    val_ds = FinetuneDataset(subs_val, config['MODA_data_config'], augmentation_config=None, device=config['device'])
-    test_ds = FinetuneDataset(subs_test, config['MODA_data_config'], augmentation_config=None, device=config['device'])
+def get_dataloaders(config, dataset_path):
+    subs_train, subs_val, subs_test = get_subject_list(config, dataset_path)
+    train_ds = FinetuneDataset(subs_train, config, dataset_path, augmentation_config=config, device=config['device'])
+    val_ds = FinetuneDataset(subs_val, config, dataset_path, augmentation_config=None, device=config['device'])
+    test_ds = FinetuneDataset(subs_test, config, dataset_path, augmentation_config=None, device=config['device'])
 
     idx_true, idx_false = get_class_idxs(train_ds, 0)
 
-    train_sampler = RandomSampler(idx_true, idx_false, config['MODA_data_config'])
+    train_sampler = RandomSampler(idx_true, idx_false, config)
 
     train_dl = DataLoader(
         train_ds, 
-        batch_size=config['MODA_data_config']['batch_size'],
+        batch_size=config['batch_size'],
         sampler=train_sampler,
         shuffle=False,
         num_workers=0,
@@ -173,7 +174,7 @@ def get_dataloaders(config):
     
     val_dl = DataLoader(
         val_ds, 
-        batch_size = 6400,#config['MODA_data_config']['batch_size'],
+        batch_size = 6400,#config['batch_size'],
         # sampler=train_sampler,
         shuffle=True,
         num_workers=0,
@@ -182,7 +183,7 @@ def get_dataloaders(config):
 
     test_dl = DataLoader(
         test_ds, 
-        batch_size=config['MODA_data_config']['batch_size'],
+        batch_size=config['batch_size'],
         # sampler=train_sampler,
         shuffle=True,
         num_workers=0,

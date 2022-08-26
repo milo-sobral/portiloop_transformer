@@ -45,6 +45,6 @@ import copy
 
 def get_encoder_classifier_TFC(config):
     classifier = ClassificationModel(config) 
-    encoder = TFC(config['encoder_config'])
+    encoder = TFC(config)
     return classifier, encoder
     

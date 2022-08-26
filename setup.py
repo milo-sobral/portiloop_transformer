@@ -14,5 +14,7 @@ setup(name='transformiloop',
         'torch',
         'einops',
         'wandb',
-        'torchinfo']
+        'torchinfo',
+        'sklearn',
+        'pandas']
      )
