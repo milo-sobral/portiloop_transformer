@@ -30,7 +30,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
     experiment_name = f"{config['exp_name']}_{time.time_ns()}" if unique_name else config['exp_name']
 
     logging.debug(f"Config: {config}")
-    logger = WandBLogger(wandb_group, config, wandb_project, experiment_name)
+    logger = WandBLogger(wandb_group, config, wandb_project, experiment_name, dataset_path)
 
     # Load models
     classifier, encoder = get_encoder_classifier_TFC(config)
