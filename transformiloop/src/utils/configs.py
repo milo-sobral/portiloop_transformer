@@ -71,10 +71,10 @@ DEFAULT_CONFIG = {
 
 SAMPLEABLE_DICT = {
     'd_model': [16, 256, 16],
-    'batch_size' : [16, 256, 16],
-    'seq_len': [16, 512, 16],
+    'batch_size' : [16, 64, 16],
+    'seq_len': [16, 256, 16],
     'window_size': [16, 256, 16],
-    'seq_stride': [16, 512, 16],
+    'seq_stride': [16, 128, 16],
     'n_heads': [1, 12, 1],
     'dim_hidden': [128, 2048, 16],
     'n_layers': [1, 12, 1],
