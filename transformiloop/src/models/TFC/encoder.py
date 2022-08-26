@@ -30,7 +30,7 @@ class TFC(nn.Module): # Frequency domain encoder
         )
 
         self.projector_t = nn.Sequential(
-            nn.Linear(config['final_out_channels'] * (config['seq_len'] // 8), config['d_model'] * 2),
+            nn.Linear(config['final_out_channels'] * (config['window_size'] // 8), config['d_model'] * 2),
             nn.BatchNorm1d(config['d_model'] * 2),
             nn.ReLU(),
             nn.Linear(config['d_model'] * 2, config['d_model'] // 2)
@@ -60,7 +60,7 @@ class TFC(nn.Module): # Frequency domain encoder
         )
 
         self.projector_f = nn.Sequential(
-            nn.Linear(config['final_out_channels'] * (config['seq_len'] // 8), config['d_model'] * 2),
+            nn.Linear(config['final_out_channels'] * (config['window_size'] // 8), config['d_model'] * 2),
             nn.BatchNorm1d(config['d_model'] * 2),
             nn.ReLU(),
             nn.Linear(config['d_model'] * 2, config['d_model'] // 2)
@@ -69,10 +69,17 @@ class TFC(nn.Module): # Frequency domain encoder
 
     def forward(self, x_in_t, x_in_f):
 
+        print(x_in_t.shape)
         """Time-based Contrastive Encoder"""
         x = self.conv_block1_t(x_in_t)
+        print(x.shape)
+        
         x = self.conv_block2_t(x)
+        
+        print(x.shape)
         x = self.conv_block3_t(x)
+
+        print(x.shape)
 
         h_time = x.reshape(x.shape[0], -1)
         """Cross-space projector"""

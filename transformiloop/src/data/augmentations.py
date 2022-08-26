@@ -35,10 +35,10 @@ def DataTransform_TD(sample, aug_config):
     return aug_T
 
 
-def DataTransform_FD(sample):
+def DataTransform_FD(sample, device):
     """Weak and strong augmentations in Frequency domain """
-    aug_1 =  remove_frequency(sample, 0.1)
-    aug_2 = add_frequency(sample, 0.1)
+    aug_1 =  remove_frequency(sample, device, 0.1)
+    aug_2 = add_frequency(sample, device, 0.1)
 
     # generate random sequence
     # li = np.random.randint(0, 2, size=[sample.shape[0]]) # there are two augmentations in Frequency domain
@@ -98,14 +98,14 @@ def permutation(x, max_segments=5, seg_mode="random"):
             ret[i] = pat
     return torch.from_numpy(ret)
 
-def remove_frequency(x, maskout_ratio=0):
-    mask = torch.cuda.FloatTensor(x.shape).uniform_() > maskout_ratio # maskout_ratio are False
+def remove_frequency(x, device, maskout_ratio=0):
+    mask = torch.FloatTensor(x.shape).uniform_().to(device) > maskout_ratio # maskout_ratio are False
     mask = mask.to(x.device)
     return x*mask
 
-def add_frequency(x, pertub_ratio=0,):
+def add_frequency(x, device, pertub_ratio=0,):
 
-    mask = torch.cuda.FloatTensor(x.shape).uniform_() > (1-pertub_ratio) # only pertub_ratio of all values are True
+    mask = torch.FloatTensor(x.shape).uniform_().to(device) > (1-pertub_ratio) # only pertub_ratio of all values are True
     mask = mask.to(x.device)
     max_amplitude = x.max()
     random_am = torch.rand(mask.shape)*(max_amplitude*0.1)

@@ -77,7 +77,7 @@ class FinetuneDataset(Dataset):
         aug1, aug1_f = torch.zeros(x_data.shape), torch.zeros(x_data_f.shape)
         if self.augmentation_config is not None:
             aug1 = DataTransform_TD(x_data.unsqueeze(0), self.augmentation_config).squeeze(1)
-            aug1_f = DataTransform_FD(x_data_f.unsqueeze(0)).squeeze(1)
+            aug1_f = DataTransform_FD(x_data_f.unsqueeze(0), self.device).squeeze(1)
 
         return x_data.to(self.device), x_data_f.to(self.device), label.to(self.device), aug1.to(self.device), aug1_f.to(self.device)
 

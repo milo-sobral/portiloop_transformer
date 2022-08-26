@@ -145,9 +145,9 @@ def update_pareto(experiment, pareto):
     else:
         dominates = True
         for i, ep in enumerate(pareto):
-            if ep["cost_software"] <= experiment["cost_software"] and ep["cost_hardware"] <= experiment["cost_hardware"]:
+            if ep["cost_software"] <= experiment["cost_software"]: # and ep["cost_hardware"] <= experiment["cost_hardware"]:
                 dominates = False
-            if ep["cost_software"] > experiment["cost_software"] and ep["cost_hardware"] > experiment["cost_hardware"]:  # remove ep from pareto
+            if ep["cost_software"] > experiment["cost_software"]: # and ep["cost_hardware"] > experiment["cost_hardware"]:  # remove ep from pareto
                 to_remove.append(i)
     to_remove.sort(reverse=True)
     for i in to_remove:
@@ -164,7 +164,7 @@ def dominates_pareto(experiment, pareto):
     else:
         dominates = True
         for ep in pareto:
-            if ep["cost_software"] <= experiment["cost_software"] and ep["cost_hardware"] <= experiment["cost_hardware"]:
+            if ep["cost_software"] <= experiment["cost_software"]: # and ep["cost_hardware"] <= experiment["cost_hardware"]:
                 dominates = False
     return dominates
 
@@ -318,9 +318,9 @@ def pareto_efficiency(experiment, all_experiments):
     nb_dominated = 0
     best_cost_software = 1
     for exp in all_experiments:
-        if exp["cost_software"] < experiment["cost_software"] and exp["cost_hardware"] < experiment["cost_hardware"]:
+        if exp["cost_software"] < experiment["cost_software"]: # and exp["cost_hardware"] < experiment["cost_hardware"]:
             nb_dominating += 1
-        if exp["cost_software"] > experiment["cost_software"] and exp["cost_hardware"] > experiment["cost_hardware"]:
+        if exp["cost_software"] > experiment["cost_software"]: # and exp["cost_hardware"] > experiment["cost_hardware"]:
             nb_dominated += 1
         if exp["cost_software"] < best_cost_software:
             best_cost_software = exp["cost_software"]

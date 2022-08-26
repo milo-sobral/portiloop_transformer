@@ -45,8 +45,8 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
     logging.debug(summary(
         encoder,
         input_size=[
-            (config['batch_size'], 1, config['seq_len']),
-            (config['batch_size'], 1, config['seq_len'])
+            (config['batch_size'], 1, config['window_size']),
+            (config['batch_size'], 1, config['window_size'])
         ],
         dtypes=[torch.float, torch.float, torch.bool],
         depth=3,
