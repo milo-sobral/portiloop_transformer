@@ -4,6 +4,7 @@ from transformiloop.src.models.TFC.losses import NTXentLoss_poly
 import torch.nn as nn
 import os
 import json
+import logging
 
 
 def save_model(save_path, model, config):
@@ -91,6 +92,8 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
         model_optim.zero_grad()
         classifier_optim.zero_grad()
 
+        logging.debug(f"Training batch {batch_idx}")
+
         loss, _, predictions = run_finetune_batch(
             batch, model, classifier, nt_xent_criterion, classification_criterion, config['threshold'], config['lam'], device)
 
@@ -124,6 +127,9 @@ def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
     for batch_idx, batch in enumerate(dataloader):
         if batch_idx > limit:
             break
+
+        logging.debug(f"Testing batch {batch_idx}")
+
         # Run throuhg model
         with torch.no_grad():
             loss, _, predictions = run_finetune_batch(
