@@ -19,6 +19,7 @@ DEFAULT_CONFIG = {
     'seq_len': 64,
     'window_size': 128,
     'seq_stride': 32,
+    'val_batch_size': 100,
 
     # Transformers Params 
     'd_model': 64,

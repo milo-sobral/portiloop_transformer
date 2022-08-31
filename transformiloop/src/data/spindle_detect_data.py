@@ -174,7 +174,7 @@ def get_dataloaders(config, dataset_path):
     
     val_dl = DataLoader(
         val_ds, 
-        batch_size = 6400,#config['batch_size'],
+        batch_size = config['val_batch_size'],
         # sampler=train_sampler,
         shuffle=True,
         num_workers=0,
@@ -183,7 +183,7 @@ def get_dataloaders(config, dataset_path):
 
     test_dl = DataLoader(
         test_ds, 
-        batch_size=config['batch_size'],
+        batch_size=config['val_batch_size'],
         # sampler=train_sampler,
         shuffle=True,
         num_workers=0,

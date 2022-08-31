@@ -93,7 +93,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
         logging.debug(f"Starting epoch #{epoch}")
         print(f"Starting epoch #{epoch}")
         train_loss, train_acc, train_f1, train_rec, train_prec, train_cm = finetune_epoch(
-            encoder, config['optimizer'], train_dl, config, config['device'], classifier, config['classifier_optimizer'], 99)
+            encoder, config['optimizer'], train_dl, config, config['device'], classifier, config['classifier_optimizer'], 0)
         val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
             encoder, val_dl, config, classifier, config['device'], 39)
         loggable_dict = {

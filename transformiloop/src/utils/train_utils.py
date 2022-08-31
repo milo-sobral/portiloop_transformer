@@ -93,6 +93,7 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
         classifier_optim.zero_grad()
 
         logging.debug(f"Training batch {batch_idx}")
+        print(f"Training batch {batch_idx}")
 
         loss, _, predictions = run_finetune_batch(
             batch, model, classifier, nt_xent_criterion, classification_criterion, config['threshold'], config['lam'], device)
@@ -121,7 +122,7 @@ def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
     total_loss = []
 
     classification_criterion = nn.BCEWithLogitsLoss()
-    nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['temperature'],
+    nt_xent_criterion = NTXentLoss_poly(device, config['val_batch_size'], config['temperature'],
                                         config['use_cosine_similarity'])
 
     for batch_idx, batch in enumerate(dataloader):
@@ -129,6 +130,7 @@ def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
             break
 
         logging.debug(f"Testing batch {batch_idx}")
+        print(f"Testing batch {batch_idx}")
 
         # Run throuhg model
         with torch.no_grad():
