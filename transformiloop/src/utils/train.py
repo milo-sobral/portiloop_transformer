@@ -23,6 +23,9 @@ from transformiloop.src.utils.train_utils import (finetune_epoch,
 def run(config, wandb_group, wandb_project, save_model, unique_name):
 
     time_start = time.time()
+
+    config['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
     # fi = os.path.join(DATASET_PATH, 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt')
 
@@ -55,8 +58,6 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
     # Load data
     train_dl, val_dl, test_dl = get_dataloaders(config, dataset_path)
     logging.debug(pprint.pprint(config))
-
-    config['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Initialize training objects
     config["loss_func"] = BCEWithLogitsLoss()
