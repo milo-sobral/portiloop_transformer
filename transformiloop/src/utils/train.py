@@ -87,15 +87,16 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
     best_model_f1_score_validation = 0
     best_model_recall_validation = 0
     best_model_loss_validation = 1
+    early_stopping_counter = 0
 
     # Start of training loop
     for epoch in range(config['epochs']):
         logging.debug(f"Starting epoch #{epoch}")
         print(f"Starting epoch #{epoch}")
         train_loss, train_acc, train_f1, train_rec, train_prec, train_cm = finetune_epoch(
-            encoder, config['optimizer'], train_dl, config, config['device'], classifier, config['classifier_optimizer'], 0)
+            encoder, config['optimizer'], train_dl, config, config['device'], classifier, config['classifier_optimizer'], 99)
         val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
-            encoder, val_dl, config, classifier, config['device'], 39)
+            encoder, val_dl, config, classifier, config['device'], 99)
         loggable_dict = {
             "Training Loss": train_loss,
             "Training Accuracy": train_acc,
