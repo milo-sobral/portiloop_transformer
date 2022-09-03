@@ -148,9 +148,9 @@ def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
 
 
 def run_finetune_batch(batch, model, classifier, model_loss, class_loss, threshold, lam, device):
-    loss_c = None
-    loss_t = None
-    loss_f = None
+    # loss_c = None
+    # loss_t = None
+    # loss_f = None
 
     encoded = []
     seqs, freqs, labels, seq_augs, freq_augs = batch
@@ -159,27 +159,26 @@ def run_finetune_batch(batch, model, classifier, model_loss, class_loss, thresho
 
     # Run through encoder model
     for i in range(seqs.size(1)):
-        # print(torch.cuda.memory_allocated(0))
         seq = seqs[:, i, :].unsqueeze(1)
         freq = freqs[:, i, :].unsqueeze(1)
-        seq_aug = seq_augs[:, :, i, :]
-        freq_aug = freq_augs[:, :, i, :]
+        # seq_aug = seq_augs[:, :, i, :]
+        # freq_aug = freq_augs[:, :, i, :]
 
         h_t, z_t, h_f, z_f = model(seq, freq)
-        h_t_aug, z_t_aug, h_f_aug, z_f_aug = model(seq_aug, freq_aug)
+        # h_t_aug, z_t_aug, h_f_aug, z_f_aug = model(seq_aug, freq_aug)
 
-        l_TF = model_loss(z_t, z_f)
-        l_1, l_2, l_3 = model_loss(z_t, z_f_aug), model_loss(
-            z_t_aug, z_f), model_loss(z_t_aug, z_f_aug)
+        # l_TF = model_loss(z_t, z_f)
+        # l_1, l_2, l_3 = model_loss(z_t, z_f_aug), model_loss(
+        #     z_t_aug, z_f), model_loss(z_t_aug, z_f_aug)
 
-        if loss_c is None:
-            loss_c = (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
-            loss_t = model_loss(h_t, h_t_aug)
-            loss_f = model_loss(h_f, h_f_aug)
-        else:
-            loss_c += (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
-            loss_t += model_loss(h_t, h_t_aug).item()
-            loss_f += model_loss(h_f, h_f_aug).item()
+        # if loss_c is None:
+        #     loss_c = (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
+        #     loss_t = model_loss(h_t, h_t_aug)
+        #     loss_f = model_loss(h_f, h_f_aug)
+        # else:
+        #     loss_c += (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
+        #     loss_t += model_loss(h_t, h_t_aug).item()
+        #     loss_f += model_loss(h_f, h_f_aug).item()
 
         fea_concat = torch.cat((z_t, z_f), dim=1)
         encoded.append(fea_concat)
@@ -188,13 +187,13 @@ def run_finetune_batch(batch, model, classifier, model_loss, class_loss, thresho
     encoded = torch.stack(encoded, dim=1)
     logits = classifier(encoded).squeeze(-1)  # Run trhough transformer model
     # predictor loss, actually, here is training loss
-    loss_p = class_loss(logits, labels.to(device))
+    loss = class_loss(logits, labels.to(device))
 
     # Final loss taking into account all portions
-    loss_c /= seqs.size(1)
-    loss_t /= seqs.size(1)
-    loss_f /= seqs.size(1)
-    loss = loss_p + (1-lam) * loss_c + lam * (loss_t + loss_f)
+    # loss_c /= seqs.size(1)
+    # loss_t /= seqs.size(1)
+    # loss_f /= seqs.size(1)
+    # loss = loss_p + (1-lam) * loss_c + lam * (loss_t + loss_f)
 
     predictions = (torch.sigmoid(logits) > threshold).int()
 
