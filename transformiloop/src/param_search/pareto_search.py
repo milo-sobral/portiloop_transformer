@@ -37,7 +37,7 @@ MAXIMIZE_F1_SCORE = True
 
 
 THRESHOLD = 0.2
-WANDB_PROJECT_PARETO = "Milo-DEBUG"
+WANDB_PROJECT_PARETO = "Milo-SEARCH"
 
 path_dataset = Path(__file__).absolute().parent.parent.parent / 'dataset'
 path_pareto = Path(__file__).absolute().parent.parent.parent / 'pareto'
@@ -52,7 +52,7 @@ MAX_META_ITERATIONS = 1000  # maximum number of experiments
 
 META_MODEL_DEVICE = "cpu"  # the surrogate model will be trained on this device
 
-PARETO_ID = "tests"
+PARETO_ID = "search_01"
 RUN_NAME = f"pareto_search_{PARETO_ID}"
 
 # number of models sampled per iteration, only the best predicted one is selected
