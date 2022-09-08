@@ -34,7 +34,7 @@ class PretrainingDataset(Dataset):
         """Augmentation"""
 
         self.aug1 = DataTransform_TD(self.x_data, augmentation_config)
-        self.aug1_f = DataTransform_FD(self.x_data_f) # [7360, 1, 90]
+        self.aug1_f = DataTransform_FD(self.x_data_f, augmentation_config['device']) # [7360, 1, 90]
 
     def __getitem__(self, index):
         return self.x_data[index], self.aug1[index], self.x_data_f[index], self.aug1_f[index]
@@ -117,18 +117,18 @@ def create_sequences(
 
 
 def data_generator(data_path, config):
-    num_datapoints = config['pretraining_data_config']['num_datapoints']
+    num_datapoints = config['num_datapoints']
     data = np.loadtxt(data_path)
 
     samples = num_datapoints
     end = int((1-0.999) * num_datapoints) + num_datapoints
     train_data = data[:samples]
     # val_data = data[samples:end]
-    pretraining_seqs_train = create_sequences(train_data, config['seq_len'], 1)
+    pretraining_seqs_train = create_sequences(train_data, config['window_size'], 1)
     # pretraining_seqs_val = create_sequences(val_data, config['seq_len'], 1)
 
     # subset = True # if true, use a subset for debugging.
-    train_ds = PretrainingDataset(pretraining_seqs_train[0], config['augmentation_config'])
+    train_ds = PretrainingDataset(pretraining_seqs_train[0], config)
     # val_ds = PretrainingDataset(pretraining_seqs_val[0], aug_config)
     train_loader = torch.utils.data.DataLoader(dataset=train_ds, batch_size=config['batch_size'],
                                               drop_last=True, shuffle=True, num_workers=0)

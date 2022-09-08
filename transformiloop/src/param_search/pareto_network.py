@@ -415,10 +415,14 @@ class Worker:
                 self.__exp_to_run_lock.release()
                 predicted_loss = exp['cost_software']
 
-                # TODO: Get a data config dict and a exp dict
                 logging.debug("Launch run")
                 best_loss, best_f1_score, exp["best_epoch"] = run(
-                    exp["config_dict"], f"{WANDB_PROJECT_PARETO}_runs_{PARETO_ID}", WANDB_PROJECT_PARETO, save_model=False, unique_name=True)
+                    exp["config_dict"], f"{WANDB_PROJECT_PARETO}_runs_{PARETO_ID}", 
+                    WANDB_PROJECT_PARETO, 
+                    save_model=False, 
+                    unique_name=True,
+                    pretrain=True,
+                    finetune_encoder=True)
                 logging.debug("Run finished")
                 exp["cost_software"] = 1 - \
                     best_f1_score if MAXIMIZE_F1_SCORE else best_loss

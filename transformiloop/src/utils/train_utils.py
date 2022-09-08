@@ -42,8 +42,8 @@ def pretrain_epoch(model, model_optimizer, train_loader, config, device):
 
         """Compute Pre-train loss"""
         """NTXentLoss: normalized temperature-scaled cross entropy loss. From SimCLR"""
-        nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['encoder_config']['temperature'],
-                                            config['encoder_config']['use_cosine_similarity'])
+        nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['temperature'],
+                                            config['use_cosine_similarity'])
 
         loss_t = nt_xent_criterion(h_t, h_t_aug)
         loss_f = nt_xent_criterion(h_f, h_f_aug)
@@ -53,8 +53,8 @@ def pretrain_epoch(model, model_optimizer, train_loader, config, device):
             z_t_aug, z_f), nt_xent_criterion(z_t_aug, z_f_aug)
         loss_c = (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
 
-        lam = 0.3
-        loss = lam * (loss_t + loss_f) + (1 - lam)*loss_c
+        lam = config['lam']
+        loss = lam * (loss_t + loss_f) + (1 - lam) * loss_c
 
         losses_t.append(loss_t.item())
         losses_f.append(loss_f.item())
@@ -145,6 +145,14 @@ def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
     # print(f"Accuracy: {acc*100}\nF1-score: {f1*100}\nRecall: {recall*100}\nPrecision: {precision*100}\nConfusion Matrix: {cm}")
 
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
+
+
+def simple_run_finetune_batch(batch, classifier, loss, threshold, device):
+    seqs, _, labels, _, _ = batch
+    logits = classifier(seqs).squeeze(-1) 
+    loss = loss(logits, labels.to(device))
+    predictions = (torch.sigmoid(logits) > threshold).int()
+    return loss, predictions
 
 
 def run_finetune_batch(batch, model, classifier, model_loss, class_loss, threshold, lam, device):

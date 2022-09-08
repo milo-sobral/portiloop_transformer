@@ -37,6 +37,7 @@ DEFAULT_CONFIG = {
     'log_every': 100,
     'dropout': 0.5,
     'epochs': 200,
+    'epochs_pretrain': 30,
     'es_epochs': 20,
     'lam': 0.2,
     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
@@ -45,6 +46,7 @@ DEFAULT_CONFIG = {
     'max_val_num': 3000,
     'num_training_sets': 3,
     'num_datapoints': 100000,
+    'es_delta': 0.01,
 
     # Finetuning data config
     # 'subjects_path': DATASET_PATH,

@@ -20,13 +20,14 @@ from transformiloop.src.utils.train_utils import (finetune_epoch,
                                                   pretrain_epoch)
 
 
-def run(config, wandb_group, wandb_project, save_model, unique_name):
+def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, finetune_encoder):
 
     time_start = time.time()
 
     config['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
+    pretraining_data_path = dataset_path / 'pretraining_dataset.txt'
     # fi = os.path.join(DATASET_PATH, 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt')
 
     # Initialize WandB logging
@@ -56,8 +57,9 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
     ))
 
     # Load data
-    train_dl, val_dl, test_dl = get_dataloaders(config, dataset_path)
+    train_dl, val_dl, _ = get_dataloaders(config, dataset_path)
     logging.debug(pprint.pprint(config))
+    pretraining_loader = data_generator(pretraining_data_path, config)
 
     # Initialize training objects
     config["loss_func"] = BCEWithLogitsLoss()
@@ -89,7 +91,21 @@ def run(config, wandb_group, wandb_project, save_model, unique_name):
     best_model_loss_validation = 1
     early_stopping_counter = 0
 
-    # Start of training loop
+    # Start of Pretraining loop
+    min_loss = 10000.0
+    if pretrain:
+        for epoch in range(config['epochs_pretrain']):
+            loss, loss_t, loss_f, loss_c = pretrain_epoch(encoder, config['optimizer'], pretraining_loader, config, config['device'])
+            logger.log({'loss': loss, 'loss_t': loss_t, 'loss_f': loss_f, 'loss_c':loss_c})
+            if abs(min_loss - loss) <= config['es_delta']:
+                break
+        logging.debug("Done with pretraining...")
+    
+    if not finetune_encoder:
+        for param in encoder.parameters():
+            param.requires_grad = False
+
+    # Start of finetuning loop
     for epoch in range(config['epochs']):
         logging.debug(f"Starting epoch #{epoch}")
         print(f"Starting epoch #{epoch}")
