@@ -101,7 +101,7 @@ def recv_object(sock):
             return None
         l = len(msg)
         logging.debug(f"l:{l}")
-    logging.debug("data len:", msg[:HEADER_SIZE])
+    # logging.debug("data len:", msg[:HEADER_SIZE])
     logging.debug(f"msg[:4]: {msg[:4]}")
     if msg[:3] == b'ACK':
         return 'ACK'
@@ -121,7 +121,7 @@ def recv_object(sock):
             return None
         l = len(msg)
         logging.debug(f"DEBUG2: l:{l}")
-    logging.debug("final data len:", l)
+    # logging.debug("final data len:", l)
     logging.debug(f"finished receiving after {time.time() - t_start}s.")
     send_ack(sock)
     return pickle.loads(msg)
