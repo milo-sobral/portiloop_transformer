@@ -23,7 +23,7 @@ class TransformerExtractor(nn.Module):
             dropout (float): dropout value
         """
         super().__init__()
-        self.embedder = nn.Linear(1, d_model, device=device)
+        # self.embedder = nn.Linear(1, d_model, device=device)
         self.pos_encoder = PositionalEncoding(d_model, dropout)
         encoder_layers = TransformerEncoderLayer(d_model, n_heads, dim_hidden, dropout, batch_first=True)
         self.transformer_encoder = TransformerEncoder(encoder_layers, n_layers)
