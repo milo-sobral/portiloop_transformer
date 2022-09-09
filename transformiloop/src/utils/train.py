@@ -25,6 +25,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     time_start = time.time()
 
     config['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    config['d_model'] = config['window_size']
 
     dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
     pretraining_data_path = dataset_path / 'pretraining_dataset.txt'

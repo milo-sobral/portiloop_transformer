@@ -95,7 +95,7 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
         logging.debug(f"Training batch {batch_idx}")
         print(f"Training batch {batch_idx}")
 
-        loss, _, predictions = run_finetune_batch(
+        loss, _, predictions = simple_run_finetune_batch(
             batch, model, classifier, nt_xent_criterion, classification_criterion, config['threshold'], config['lam'], device)
 
         all_preds.append(predictions)
@@ -134,7 +134,7 @@ def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
 
         # Run throuhg model
         with torch.no_grad():
-            loss, _, predictions = run_finetune_batch(
+            loss, _, predictions = simple_run_finetune_batch(
                 batch, model, classifier, nt_xent_criterion, classification_criterion, config['threshold'], config['lam'], device)
             all_preds.append(predictions)
             all_targets.append(batch[2])
@@ -147,12 +147,12 @@ def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
 
 
-def simple_run_finetune_batch(batch, classifier, loss, threshold, device):
+def simple_run_finetune_batch(batch, model, classifier, model_loss, loss, threshold, lam, device):
     seqs, _, labels, _, _ = batch
     logits = classifier(seqs).squeeze(-1) 
     loss = loss(logits, labels.to(device))
     predictions = (torch.sigmoid(logits) > threshold).int()
-    return loss, predictions
+    return loss, None, predictions
 
 
 def run_finetune_batch(batch, model, classifier, model_loss, class_loss, threshold, lam, device):

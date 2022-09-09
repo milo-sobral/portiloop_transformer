@@ -421,8 +421,8 @@ class Worker:
                     WANDB_PROJECT_PARETO, 
                     save_model=False, 
                     unique_name=True,
-                    pretrain=True,
-                    finetune_encoder=True)
+                    pretrain=False,
+                    finetune_encoder=False)
                 logging.debug("Run finished")
                 exp["cost_software"] = 1 - \
                     best_f1_score if MAXIMIZE_F1_SCORE else best_loss

@@ -1,4 +1,4 @@
-from transformiloop.src.models.pretrainers.prediction_encoder_model import PredictionModel
+# from transformiloop.src.models.pretrainers.prediction_encoder_model import PredictionModel
 from transformiloop.src.models.classifiers.classification_encoder_model import ClassificationModel
 from transformiloop.src.models.TFC.encoder import TFC
 import torch.nn as nn
