@@ -100,13 +100,13 @@ def recv_object(sock):
         except OSError:  # connection closed or broken
             return None
         l = len(msg)
-        # logging.debug(f"l:{l}")
-    # logging.debug("data len:", msg[:HEADER_SIZE])
-    # logging.debug(f"msg[:4]: {msg[:4]}")
+        logging.debug(f"l:{l}")
+    logging.debug("data len:", msg[:HEADER_SIZE])
+    logging.debug(f"msg[:4]: {msg[:4]}")
     if msg[:3] == b'ACK':
         return 'ACK'
     msglen = int(msg[:HEADER_SIZE])
-    # logging.debug(f"receiving {msglen} bytes")
+    logging.debug(f"receiving {msglen} bytes")
     t_start = time.time()
     # now, we receive the actual data (no more than the data length, again to prevent collisions)
     msg = b''
@@ -120,9 +120,9 @@ def recv_object(sock):
         except OSError:  # connection closed or broken
             return None
         l = len(msg)
-        # logging.debug(f"DEBUG2: l:{l}")
-    # logging.debug("final data len:", l)
-    # logging.debug(f"finished receiving after {time.time() - t_start}s.")
+        logging.debug(f"DEBUG2: l:{l}")
+    logging.debug("final data len:", l)
+    logging.debug(f"finished receiving after {time.time() - t_start}s.")
     send_ack(sock)
     return pickle.loads(msg)
 

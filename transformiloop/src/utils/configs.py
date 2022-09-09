@@ -18,13 +18,13 @@ DEFAULT_CONFIG = {
     'batch_size' : 64,
     'seq_len': 64,
     'window_size': 128,
-    'seq_stride': 32,
-    'val_batch_size': 100,
+    'seq_stride': 1,
+    'val_batch_size': 600,
 
     # Transformers Params 
     'd_model': 64,
-    'n_heads': 4,
-    'dim_hidden': 256,
+    'n_heads': 8,
+    'dim_hidden': 512,
     'n_layers': 4,
     'latent_dim': 32,
 
