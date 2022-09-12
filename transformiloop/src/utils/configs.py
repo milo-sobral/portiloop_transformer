@@ -74,16 +74,16 @@ DEFAULT_CONFIG = {
 
 SAMPLEABLE_DICT = {
     'd_model': [16, 256, 16],
-    'batch_size' : [16, 64, 16],
+    # 'batch_size' : [16, 64, 16],
     'seq_len': [16, 256, 16],
     'window_size': [16, 256, 16],
-    'seq_stride': [16, 128, 16],
-    'n_heads': [1, 10, 1],
-    'dim_hidden': [128, 2048, 16],
-    'n_layers': [1, 10, 1],
+    # 'seq_stride': [16, 128, 16],
+    'n_heads': [3, 10, 1],
+    'dim_hidden': [256, 2048, 16],
+    'n_layers': [3, 10, 1],
     'dropout': [0, 0.5, 0.1],
-    'lr': [1e-6, 1e-3, 5e-6],
-    'lam': [0.1, 0.7, 0.01]
+    'lr': [1e-6, 1e-5, 5e-6],
+    # 'lam': [0.1, 0.7, 0.01]
 }
 
 def sample_config_dict(exp_name, prev_exp, all_exps):
