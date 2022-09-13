@@ -60,7 +60,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     # Load data
     train_dl, val_dl, _ = get_dataloaders(config, dataset_path)
     logging.debug(pprint.pprint(config))
-    pretraining_loader = data_generator(pretraining_data_path, config)
+    # pretraining_loader = data_generator(pretraining_data_path, config)
 
     # Initialize training objects
     config["loss_func"] = BCEWithLogitsLoss()

@@ -16,9 +16,9 @@ def get_default_config(name):
 DEFAULT_CONFIG = {
     # Data params
     'batch_size' : 64,
-    'seq_len': 64,
-    'window_size': 128,
-    'seq_stride': 32,
+    'seq_len': 512,
+    'window_size': 8,
+    'seq_stride': 8,
     'val_batch_size': 100,
 
     # Transformers Params 
@@ -27,6 +27,8 @@ DEFAULT_CONFIG = {
     'dim_ff': 256,
     'n_layers': 4,
     'latent_dim': 32,
+    'q_dim': 512,
+    'v_dim': 1024,
 
     # Training params
     'max_duration': int(71.5 * 3600),

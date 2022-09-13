@@ -155,9 +155,9 @@ class RandomSampler(Sampler):
 
 def get_dataloaders(config, dataset_path):
     subs_train, subs_val, subs_test = get_subject_list(config, dataset_path)
-    train_ds = FinetuneDataset(subs_train, config, dataset_path, augmentation_config=config, device=config['device'])
-    val_ds = FinetuneDataset(subs_val, config, dataset_path, augmentation_config=config, device=config['device'])
-    test_ds = FinetuneDataset(subs_test, config, dataset_path, augmentation_config=config, device=config['device'])
+    train_ds = FinetuneDataset(subs_train, config, dataset_path, augmentation_config=None, device=config['device'])
+    val_ds = FinetuneDataset(subs_val, config, dataset_path, augmentation_config=None, device=config['device'])
+    test_ds = FinetuneDataset(subs_test, config, dataset_path, augmentation_config=None, device=config['device'])
 
     idx_true, idx_false = get_class_idxs(train_ds, 0)
 

@@ -5,6 +5,9 @@ from transformiloop.src.models.helper_models import TransformerExtractor
 from fast_transformers.transformers import TransformerEncoder, \
     TransformerEncoderLayer
 from fast_transformers.attention import AttentionLayer, FullAttention
+from transformiloop.src.models.embedding_models import PositionalEncoding
+from einops import rearrange
+
 
 class ClassificationModel(nn.Module):
     def __init__(
@@ -67,6 +70,8 @@ class ClassificationModel(nn.Module):
         # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
         self.flatten = nn.Flatten()
         self.classifier = nn.Linear(d_model * config['seq_len'], 1)
+        self.pos_encoder = PositionalEncoding(d_model, dropout)
+
 
     def forward(self, x: tensor):
         """_summary_
@@ -78,6 +83,11 @@ class ClassificationModel(nn.Module):
             x_pred (tensor): Output tensor of Dimension [batch_size, prediction_len] after going through the Autoencoder model
             x_rec (tensor): Output tensor of Dimension [batch_size, seq_len] after going through the Autoencoder model
         """
+
+        # Positional encoding
+        x = rearrange(x, 'b s e -> s b e')
+        x = self.pos_encoder(x)
+        x = rearrange(x, 's b e -> b s e')
 
         # Go through feature extractor
         x = self.transformer_extractor(x)
