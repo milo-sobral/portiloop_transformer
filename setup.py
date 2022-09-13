@@ -16,5 +16,7 @@ setup(name='transformiloop',
         'wandb',
         'torchinfo',
         'sklearn',
-        'pandas']
+        'pandas',
+        'pytorch-fast-transformers',
+        'torchmetrics']
      )
