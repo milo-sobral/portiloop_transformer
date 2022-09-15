@@ -5,6 +5,7 @@ import torch.nn as nn
 import os
 import json
 import logging
+import pickle
 
 
 def save_model(save_path, model, config):
@@ -73,7 +74,7 @@ def pretrain_epoch(model, model_optimizer, train_loader, config, device):
     return total_loss, loss_t, loss_f, loss_c
 
 
-def finetune_epoch(model, model_optim, dataloader, config, device, classifier, classifier_optim, limit):
+def finetune_epoch(model, model_optim, dataloader, config, device, classifier, classifier_optim):
     model.train()
     classifier.train()
 
@@ -86,14 +87,13 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
                                         config['use_cosine_similarity'])
 
     for batch_idx, batch in enumerate(dataloader):
-        if batch_idx > limit:
-            break
-
+        
         model_optim.zero_grad()
         classifier_optim.zero_grad()
 
-        logging.debug(f"Training batch {batch_idx}")
-        print(f"Training batch {batch_idx}")
+        if batch_idx % config['log_every'] == 0:
+            logging.debug(f"Training batch {batch_idx}")
+            print(f"Training batch {batch_idx}")
 
         loss, _, predictions = simple_run_finetune_batch(
             batch, model, classifier, nt_xent_criterion, classification_criterion, config['threshold'], config['lam'], device)
@@ -113,7 +113,7 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
 
 
-def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
+def finetune_test_epoch(model, dataloader, config, classifier, device):
     model.eval()
     classifier.eval()
 
@@ -126,19 +126,21 @@ def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
                                         config['use_cosine_similarity'])
 
     for batch_idx, batch in enumerate(dataloader):
-        if batch_idx > limit:
-            break
+        if batch_idx % config['log_every'] == 0:
+            logging.debug(f"Testing batch {batch_idx}")
+            print(f"Testing batch {batch_idx}")
+            print(len(pickle.dumps(all_preds)))
+            print(len(pickle.dumps(all_targets)))
+            print(len(pickle.dumps(total_loss)))
 
-        logging.debug(f"Testing batch {batch_idx}")
-        print(f"Testing batch {batch_idx}")
-
-        # Run throuhg model
+        # Run through model
         with torch.no_grad():
             loss, _, predictions = simple_run_finetune_batch(
                 batch, model, classifier, nt_xent_criterion, classification_criterion, config['threshold'], config['lam'], device)
             all_preds.append(predictions)
             all_targets.append(batch[2])
             total_loss.append(loss.cpu().item())
+        
 
     acc, f1, recall, precision, cm = compute_metrics(torch.stack(
         all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
@@ -149,8 +151,10 @@ def finetune_test_epoch(model, dataloader, config, classifier, device, limit):
 
 def simple_run_finetune_batch(batch, model, classifier, model_loss, loss, threshold, lam, device):
     seqs, _, labels, _, _ = batch
+    seqs = seqs.to(device)
+    labels = labels.to(device)
     logits = classifier(seqs).squeeze(-1) 
-    loss = loss(logits, labels.to(device))
+    loss = loss(logits, labels)
     predictions = (torch.sigmoid(logits) > threshold).int()
     return loss, None, predictions
 

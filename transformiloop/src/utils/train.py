@@ -56,9 +56,11 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
         dtypes=[torch.float, torch.float, torch.bool],
         depth=3,
     ))
+    classifier.to(config['device'])
 
     # Load data
     train_dl, val_dl, _ = get_dataloaders(config, dataset_path)
+    print(len(val_dl))
     logging.debug(pprint.pprint(config))
     # pretraining_loader = data_generator(pretraining_data_path, config)
 
@@ -76,10 +78,11 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
         config["betas"])
 
     config["scheduler"] = optim.lr_scheduler.StepLR(
-        config["optimizer"],
-        step_size=1000,
+        config["classifier_optimizer"],
+        step_size=50,
         gamma=0.1
     )
+
     loss_es = None
     best_epoch = 0
     updated_model = False
@@ -106,14 +109,27 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
         for param in encoder.parameters():
             param.requires_grad = False
 
+    # Initial validation 
+    val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
+            encoder, val_dl, config, classifier, config['device'])
+    loggable_dict = {
+        "Validation Loss": val_loss,
+        "Validation Accuracy": val_acc,
+        "Validation F1": val_f1,
+        "Validation Recall": val_rec,
+        "Validation Precision": val_prec,
+        "Validation Confusion Matrix": val_cm
+    }
+    logger.log(loggable_dict=loggable_dict)
+
     # Start of finetuning loop
     for epoch in range(config['epochs']):
         logging.debug(f"Starting epoch #{epoch}")
         print(f"Starting epoch #{epoch}")
         train_loss, train_acc, train_f1, train_rec, train_prec, train_cm = finetune_epoch(
-            encoder, config['optimizer'], train_dl, config, config['device'], classifier, config['classifier_optimizer'], 99)
+            encoder, config['optimizer'], train_dl, config, config['device'], classifier, config['classifier_optimizer'])
         val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
-            encoder, val_dl, config, classifier, config['device'], 99)
+            encoder, val_dl, config, classifier, config['device'])
         loggable_dict = {
             "Training Loss": train_loss,
             "Training Accuracy": train_acc,
@@ -129,6 +145,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
             "Validation Confusion Matrix": val_cm
         }
         logger.log(loggable_dict=loggable_dict)
+        config['classifier_optimizer'].step()
 
         def save_best_model():
             best_encoder = copy.deepcopy(encoder)

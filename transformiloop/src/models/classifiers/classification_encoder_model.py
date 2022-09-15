@@ -70,7 +70,7 @@ class ClassificationModel(nn.Module):
         # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
         self.flatten = nn.Flatten()
         self.classifier = nn.Linear(d_model * config['seq_len'], 1)
-        self.pos_encoder = PositionalEncoding(d_model, dropout)
+        self.pos_encoder = PositionalEncoding(d_model, device=device, dropout=dropout)
 
 
     def forward(self, x: tensor):

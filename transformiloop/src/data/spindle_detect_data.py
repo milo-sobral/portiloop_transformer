@@ -79,7 +79,7 @@ class FinetuneDataset(Dataset):
             aug1 = DataTransform_TD(x_data.unsqueeze(0), self.augmentation_config).squeeze(1)
             aug1_f = DataTransform_FD(x_data_f.unsqueeze(0), self.device).squeeze(1)
 
-        return x_data.to(self.device), x_data_f.to(self.device), label.to(self.device), aug1.to(self.device), aug1_f.to(self.device)
+        return x_data, x_data_f, label, aug1, aug1_f
 
     def is_spindle(self, idx):
         assert 0 <= idx <= len(self), f"Index out of range ({idx}/{len(self)})."
@@ -129,7 +129,7 @@ class RandomSampler(Sampler):
         self.idx_false = idx_false
         self.nb_true = self.idx_true.size
         self.nb_false = self.idx_false.size
-        self.length = config['training_batches'] * config['batch_size']
+        self.length = config['batches_per_epoch'] * config['batch_size']
 
     def __iter__(self):
         global precision_validation_factor
@@ -153,6 +153,20 @@ class RandomSampler(Sampler):
     def __len__(self):
         return self.length
 
+class ValidationSampler(Sampler):
+    def __init__(self, data_source, dividing_factor):
+        self.len_max = len(data_source)
+        self.data = data_source
+        self.dividing_factor = dividing_factor
+
+    def __iter__(self):
+        for idx in range(0, self.len_max, self.dividing_factor):
+            yield idx
+
+    def __len__(self):
+        return self.len_max // self.dividing_factor
+
+
 def get_dataloaders(config, dataset_path):
     subs_train, subs_val, subs_test = get_subject_list(config, dataset_path)
     train_ds = FinetuneDataset(subs_train, config, dataset_path, augmentation_config=None, device=config['device'])
@@ -162,6 +176,8 @@ def get_dataloaders(config, dataset_path):
     idx_true, idx_false = get_class_idxs(train_ds, 0)
 
     train_sampler = RandomSampler(idx_true, idx_false, config)
+    val_sampler = ValidationSampler(val_ds, config['val_dividing_factor'])
+    test_sampler = ValidationSampler(test_ds, config['test_dividing_factor'])
 
     train_dl = DataLoader(
         train_ds, 
@@ -175,19 +191,19 @@ def get_dataloaders(config, dataset_path):
     val_dl = DataLoader(
         val_ds, 
         batch_size = config['val_batch_size'],
-        # sampler=train_sampler,
-        shuffle=True,
+        sampler=val_sampler,
         num_workers=0,
         pin_memory=False,
+        shuffle=False,
         drop_last=True)
 
     test_dl = DataLoader(
         test_ds, 
-        batch_size=config['val_batch_size'],
-        # sampler=train_sampler,
-        shuffle=True,
+        batch_size = config['val_batch_size'],
+        sampler=test_sampler,
         num_workers=0,
         pin_memory=False,
+        shuffle=False,
         drop_last=True)
 
     return train_dl, val_dl, test_dl
