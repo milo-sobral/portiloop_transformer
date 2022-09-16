@@ -25,7 +25,7 @@ from requests import get
 from transformiloop.src.param_search.pareto_network_server_utils import Server, RECV_TIMEOUT_META_FROM_SERVER, SOCKET_TIMEOUT_CONNECT_META, PORT_META, RECV_TIMEOUT_WORKER_FROM_SERVER, \
     PORT_WORKER, SOCKET_TIMEOUT_CONNECT_WORKER, ACK_TIMEOUT_WORKER_TO_SERVER, IP_SERVER, ACK_TIMEOUT_META_TO_SERVER, select_and_send_or_close_socket, poll_and_recv_or_close_socket, get_connected_socket, LOOP_SLEEP_TIME_META, LOOP_SLEEP_TIME_WORKER, LOOP_SLEEP_TIME, SEND_ALIVE
 from transformiloop.src.param_search.pareto_search import LoggerWandbPareto, RUN_NAME, SurrogateModel, META_MODEL_DEVICE, train_surrogate, update_pareto, nb_parameters, MAX_NB_PARAMETERS, NB_SAMPLED_MODELS_PER_ITERATION, \
-    exp_max_pareto_efficiency, load_network_files, dump_network_files, transform_config_dict_to_input, WANDB_PROJECT_PARETO, PARETO_ID, MAXIMIZE_F1_SCORE
+    exp_max_pareto_efficiency, exp_min_software_cost, load_network_files, dump_network_files, transform_config_dict_to_input, WANDB_PROJECT_PARETO, PARETO_ID, MAXIMIZE_F1_SCORE
 
 from transformiloop.src.utils.train import run
 from transformiloop.src.utils.configs import compare_configs, sample_config_dict
@@ -40,11 +40,12 @@ class MetaLearner:
     This receives samples batches and sends new weights
     """
 
-    def __init__(self, server_ip=None):
+    def __init__(self, server_ip=None, hardware_cost=False):
         self.public_ip = get('http://api.ipify.org').text
         self.local_ip = socket.gethostbyname(socket.gethostname())
         self.server_ip = server_ip if server_ip is not None else '127.0.0.1'
         self.recv_timeout = RECV_TIMEOUT_META_FROM_SERVER
+        self._hardware_cost = hardware_cost
         self.__results_lock = Lock()
         self.__results = []
         self.__to_launch_lock = Lock()
@@ -266,8 +267,10 @@ class MetaLearner:
                     if len(exps) >= NB_SAMPLED_MODELS_PER_ITERATION:
                         # select model
                         model_selected = True
-                        exp = exp_max_pareto_efficiency(
-                            exps, pareto_front, finished_experiments)
+                        if self._hardware_cost:  # minimize the Pareto tradeoff between hardware and software
+                            exp = exp_max_pareto_efficiency(exps, pareto_front, finished_experiments)
+                        else:  # minimize only the software cost (loss)
+                            exp = exp_min_software_cost(exps)
 
                 logging.debug(f"config: {exp['config_dict']}")
                 logging.debug(f"nb parameters: {exp['cost_hardware']}")

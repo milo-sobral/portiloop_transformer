@@ -109,8 +109,10 @@ def sample_config_dict(exp_name, prev_exp, all_exps):
     while flag_in_exps:
         noise = choices(population=[True, False], weights=[EPSILON_NOISE, 1.0 - EPSILON_NOISE])[0]
         if prev_exp == {} or noise:
+            logging.debug(f"sampling random config")  # TODO: remove
             sampled_config, sample_config_unrounded = sample_once()
         else:
+            logging.debug(f"sampling config near previous experiment")  # TODO: remove
             center = get_sampleable_from_config(prev_exp)
             sampled_config, sample_config_unrounded = sample_once(center=center)
         flag_in_exps = False

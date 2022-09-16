@@ -385,6 +385,24 @@ def exp_max_pareto_efficiency(experiments, pareto_front, all_experiments):
         return best_exp
 
 
+def exp_min_software_cost(experiments):
+    assert len(experiments) >= 1
+    noise = random.choices(population=[True, False], weights=[EPSILON_EXP_NOISE, 1.0 - EPSILON_EXP_NOISE])[0]
+    if noise:
+        return random.choice(experiments)
+    else:
+        min_cost = np.inf
+        best_exp = None
+        for exp in experiments:
+            cost = exp["cost_software"]
+            if cost <= min_cost:
+                min_cost = cost
+                best_exp = exp
+        assert best_exp is not None
+        logging.debug(f"selected best exp with software cost {best_exp['cost_software']}")
+        return best_exp
+
+
 def dump_files(all_experiments, pareto_front):
     """
     exports pickled files to path_pareto
