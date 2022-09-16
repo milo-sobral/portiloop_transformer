@@ -185,7 +185,7 @@ def get_dataloaders(config, dataset_path):
         sampler=train_sampler,
         shuffle=False,
         num_workers=0,
-        pin_memory=False,
+        pin_memory=True,
         drop_last=True)
     
     val_dl = DataLoader(
@@ -193,7 +193,7 @@ def get_dataloaders(config, dataset_path):
         batch_size = config['val_batch_size'],
         sampler=val_sampler,
         num_workers=0,
-        pin_memory=False,
+        pin_memory=True,
         shuffle=False,
         drop_last=True)
 
@@ -202,7 +202,7 @@ def get_dataloaders(config, dataset_path):
         batch_size = config['val_batch_size'],
         sampler=test_sampler,
         num_workers=0,
-        pin_memory=False,
+        pin_memory=True,
         shuffle=False,
         drop_last=True)
 
