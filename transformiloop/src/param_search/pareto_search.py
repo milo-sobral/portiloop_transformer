@@ -514,13 +514,14 @@ def iterative_training_local(minimize_hardware_cost=False):
 
     # main meta-learning procedure:
 
+    prev_exp = {}
+
     for meta_iteration in range(MAX_META_ITERATIONS):
         num_experiment = len(all_experiments)
         logging.debug("---")
         logging.debug(f"ITERATION N° {meta_iteration}")
 
         exp = {}
-        prev_exp = {}
         exps = []
         model_selected = False
         meta_model.eval()
@@ -529,8 +530,7 @@ def iterative_training_local(minimize_hardware_cost=False):
             exp = {}
 
             # sample model
-            config_dict, unrounded = sample_config_dict(
-                name=RUN_NAME + "_" + str(num_experiment), previous_exp=prev_exp, all_exp=all_experiments)
+            config_dict, unrounded = sample_config_dict(RUN_NAME + "_" + str(num_experiment), prev_exp, all_experiments)
 
             nb_params = nb_parameters(config_dict)
             if nb_params > MAX_NB_PARAMETERS or nb_params < MIN_NB_PARAMETERS:
@@ -566,8 +566,15 @@ def iterative_training_local(minimize_hardware_cost=False):
         logging.debug(f"predicted cost: {predicted_cost}")
         logging.debug("training...")
         # TODO: Get the dataconfig and the experiment config
+        # TODO Change this!
         best_loss, best_f1_score, exp["best_epoch"] = run(
-            exp["config_dict"], f"{WANDB_PROJECT_PARETO}_runs_{PARETO_ID}", save_model=False, unique_name=True) # TODO Change this!
+            config=exp["config_dict"],
+            wandb_group='group_test_colab',
+            wandb_project='Yann-DEBUG',
+            save_model=False,
+            unique_name=True,
+            pretrain=False,
+            finetune_encoder=True)
         exp["cost_software"] = 1 - \
             best_f1_score if MAXIMIZE_F1_SCORE else best_loss
 
