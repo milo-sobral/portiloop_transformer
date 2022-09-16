@@ -16,17 +16,22 @@ def get_default_config(name):
 DEFAULT_CONFIG = {
     # Data params
     'batch_size' : 64,
-    'seq_len': 64,
-    'window_size': 128,
-    'seq_stride': 1,
-    'val_batch_size': 600,
+    'seq_len': 512,
+    'window_size': 32,
+    'seq_stride': 32,
+    'val_batch_size': 100,
+    'val_dividing_factor': 10,
+    'test_dividing_factor': 1,
+    'batches_per_epoch': 100,
 
     # Transformers Params 
     'd_model': 64,
     'n_heads': 8,
-    'dim_hidden': 512,
+    'dim_ff': 512,
     'n_layers': 4,
     'latent_dim': 32,
+    'q_dim': 64,
+    'v_dim': 112,
 
     # Training params
     'max_duration': int(71.5 * 3600),
@@ -34,13 +39,14 @@ DEFAULT_CONFIG = {
     'lr': 1e-5,
     'betas': (0.9, 0.99),
     'clip': 5,
-    'log_every': 100,
-    'dropout': 0.5,
-    'epochs': 200,
+    'log_every': 50,
+    'dropout': 0.2,
+    'epochs': 400,
     'epochs_pretrain': 30,
-    'es_epochs': 20,
+    'es_epochs': 100,
     'lam': 0.2,
     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+    'final_norm': False,
 
     # Pretraining data 
     'max_val_num': 3000,
@@ -53,7 +59,6 @@ DEFAULT_CONFIG = {
     # 'data_path': os.path.join(DATASET_PATH, 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt'),
     'len_segment': 115 * 250,
     'fe': 250,
-    'training_batches': 100000,
     'validation_batches': 100000,
     'seed': None,
 
@@ -74,16 +79,16 @@ DEFAULT_CONFIG = {
 
 SAMPLEABLE_DICT = {
     'd_model': [16, 256, 16],
-    # 'batch_size' : [16, 64, 16],
-    'seq_len': [8, 64, 4],
-    'window_size': [96, 256, 8],
-    # 'seq_stride': [16, 128, 16],
+    'batch_size' : [16, 64, 16],
+    'seq_len': [16, 256, 16],
+    'window_size': [16, 256, 16],
+    'seq_stride': [16, 128, 16],
     'n_heads': [1, 10, 1],
-    'dim_hidden': [512, 2048, 16],
+    'dim_hidden': [128, 2048, 16],
     'n_layers': [1, 10, 1],
-    'dropout': [0.3, 0.6, 0.1],
+    'dropout': [0, 0.5, 0.1],
     'lr': [1e-6, 1e-5, 5e-6],
-    # 'lam': [0.1, 0.7, 0.01]
+    'lam': [0.1, 0.7, 0.01]
 }
 
 def sample_config_dict(exp_name, prev_exp, all_exps):

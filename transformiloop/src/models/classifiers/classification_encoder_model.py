@@ -1,6 +1,13 @@
 from torch import tensor
 import torch.nn as nn
 from transformiloop.src.models.helper_models import TransformerExtractor
+# from fast_transformers.builders import TransformerEncoderBuilder
+from fast_transformers.transformers import TransformerEncoder, \
+    TransformerEncoderLayer
+from fast_transformers.attention import AttentionLayer, FullAttention
+from transformiloop.src.models.embedding_models import PositionalEncoding
+from einops import rearrange
+
 
 class ClassificationModel(nn.Module):
     def __init__(
@@ -25,21 +32,46 @@ class ClassificationModel(nn.Module):
 
         d_model = config['d_model']
         n_heads = config['n_heads']
-        dim_hidden  = config['dim_hidden']
+        dim_ff = config['dim_ff']
         n_layers = config['n_layers']
         device = config['device']
         dropout = config['dropout']
+        q_dim = config['q_dim']
+        v_dim = config['v_dim']
+        final_norm = config['final_norm']
 
-        self.transformer_extractor = TransformerExtractor(d_model=d_model,
-                                                          n_heads=n_heads,
-                                                          dim_hidden=dim_hidden,
-                                                          n_layers=n_layers,
-                                                          dropout=dropout,
-                                                          device=device)       
+        # self.transformer_extractor = TransformerExtractor(d_model=d_model,
+        #                                                   n_heads=n_heads,
+        #                                                   dim_hidden=dim_hidden,
+        #                                                   n_layers=n_layers,
+        #                                                   dropout=dropout,
+        #                                                   device=device)  
+        
+        self.transformer_extractor = TransformerEncoder(
+            [
+                TransformerEncoderLayer(
+                    AttentionLayer(
+                        FullAttention(),
+                        d_model,
+                        n_heads,
+                        d_keys=q_dim,
+                        d_values=v_dim,
+                    ),
+                    d_model,
+                    dim_ff,
+                    dropout,
+                    'relu',
+                )
+                for _ in range(n_layers)
+            ],
+            (nn.LayerNorm(d_model) if final_norm else None),
+        )
 
         # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
         self.flatten = nn.Flatten()
         self.classifier = nn.Linear(d_model * config['seq_len'], 1)
+        self.pos_encoder = PositionalEncoding(d_model, device=device, dropout=dropout)
+
 
     def forward(self, x: tensor):
         """_summary_
@@ -51,6 +83,11 @@ class ClassificationModel(nn.Module):
             x_pred (tensor): Output tensor of Dimension [batch_size, prediction_len] after going through the Autoencoder model
             x_rec (tensor): Output tensor of Dimension [batch_size, seq_len] after going through the Autoencoder model
         """
+
+        # Positional encoding
+        x = rearrange(x, 'b s e -> s b e')
+        x = self.pos_encoder(x)
+        x = rearrange(x, 's b e -> b s e')
 
         # Go through feature extractor
         x = self.transformer_extractor(x)
