@@ -491,7 +491,7 @@ class LoggerWandbPareto:
         self.wandb_run.finish()
 
 
-def iterative_training_local():
+def iterative_training_local(minimize_hardware_cost=False):
     logger = LoggerWandbPareto(RUN_NAME)
 
     all_experiments, pareto_front = load_network_files()
@@ -551,8 +551,10 @@ def iterative_training_local():
             if len(exps) >= NB_SAMPLED_MODELS_PER_ITERATION:
                 # select model
                 model_selected = True
-                exp = exp_max_pareto_efficiency(
-                    exps, pareto_front, all_experiments)
+                if minimize_hardware_cost:  # minimize the Pareto tradeoff between hardware and software
+                    exp = exp_max_pareto_efficiency(exps, pareto_front, all_experiments)
+                else:  # minimize only the software cost (loss)
+                    exp = exp_min_software_cost(exps)
 
         config_dict = exp["config_dict"]
         predicted_cost = exp["cost_software"]
