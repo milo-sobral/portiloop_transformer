@@ -5,7 +5,6 @@ import torch.nn as nn
 import os
 import json
 import logging
-import pickle
 
 
 def save_model(save_path, model, config):
@@ -114,37 +113,33 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
 
 
 def finetune_test_epoch(model, dataloader, config, classifier, device):
-    model.eval()
-    classifier.eval()
+    with torch.no_grad():
+        model.eval()
+        classifier.eval()
 
-    all_preds = []
-    all_targets = []
-    total_loss = []
+        all_preds = []
+        all_targets = []
+        total_loss = []
 
-    classification_criterion = nn.BCEWithLogitsLoss()
-    nt_xent_criterion = NTXentLoss_poly(device, config['val_batch_size'], config['temperature'],
-                                        config['use_cosine_similarity'])
+        classification_criterion = nn.BCEWithLogitsLoss()
+        nt_xent_criterion = NTXentLoss_poly(device, config['val_batch_size'], config['temperature'],
+                                            config['use_cosine_similarity'])
 
-    for batch_idx, batch in enumerate(dataloader):
-        if batch_idx % config['log_every'] == 0:
-            logging.debug(f"Testing batch {batch_idx}")
-            print(f"Testing batch {batch_idx}")
-            print(len(pickle.dumps(all_preds)))
-            print(len(pickle.dumps(all_targets)))
-            print(len(pickle.dumps(total_loss)))
+        for batch_idx, batch in enumerate(dataloader):
+            if batch_idx % config['log_every'] == 0:
+                logging.debug(f"Validation batch {batch_idx}")
+                print(f"Validation batch {batch_idx}")
 
-        # Run through model
-        with torch.no_grad():
+            # Run through model
             loss, _, predictions = simple_run_finetune_batch(
                 batch, model, classifier, nt_xent_criterion, classification_criterion, config['threshold'], config['lam'], device)
             all_preds.append(predictions)
             all_targets.append(batch[2])
             total_loss.append(loss.cpu().item())
-        
 
-    acc, f1, recall, precision, cm = compute_metrics(torch.stack(
-        all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
-    # print(f"Accuracy: {acc*100}\nF1-score: {f1*100}\nRecall: {recall*100}\nPrecision: {precision*100}\nConfusion Matrix: {cm}")
+        acc, f1, recall, precision, cm = compute_metrics(torch.stack(
+            all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+        # print(f"Accuracy: {acc*100}\nF1-score: {f1*100}\nRecall: {recall*100}\nPrecision: {precision*100}\nConfusion Matrix: {cm}")
 
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
 

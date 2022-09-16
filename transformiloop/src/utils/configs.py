@@ -20,9 +20,9 @@ DEFAULT_CONFIG = {
     'window_size': 32,
     'seq_stride': 32,
     'val_batch_size': 100,
-    'val_dividing_factor': 10,
+    'val_dividing_factor': 20,
     'test_dividing_factor': 1,
-    'batches_per_epoch': 100,
+    'batches_per_epoch': 200,
 
     # Transformers Params 
     'd_model': 64,
