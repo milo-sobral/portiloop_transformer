@@ -4,8 +4,10 @@ from transformiloop.src.models.TFC.losses import NTXentLoss_poly
 import torch.nn as nn
 import os
 import json
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import logging
-
+import wandb
 
 def save_model(save_path, model, config):
     if not os.path.exists(save_path):
@@ -102,14 +104,18 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
 
         # Optimize parameters
         loss.backward()
+        if batch_idx == 0:
+            plot_gradients = plot_grad_flow(classifier.cpu().named_parameters())
+        classifier = classifier.to(device)
         model_optim.step()
         classifier_optim.step()
-        total_loss.append(loss.cpu().item())
-
-    acc, f1, recall, precision, cm = compute_metrics(torch.stack(
-        all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+        with torch.no_grad():
+            total_loss.append(loss.cpu().item())
+    with torch.no_grad():
+        acc, f1, recall, precision, cm = compute_metrics(torch.stack(
+            all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
     # print(f"Accuracy: {acc*100}\nF1-score: {f1*100}\nRecall: {recall*100}\nPrecision: {precision*100}")
-    return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
+    return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm, plot_gradients
 
 
 def finetune_test_epoch(model, dataloader, config, classifier, device):
@@ -205,6 +211,37 @@ def run_finetune_batch(batch, model, classifier, model_loss, class_loss, thresho
     predictions = (torch.sigmoid(logits) > threshold).int()
 
     return loss, encoded, predictions
+
+def plot_grad_flow(named_parameters):
+    '''Plots the gradients flowing through different layers in the net during training.
+    Can be used for checking for possible gradient vanishing / exploding problems.
+    
+    Usage: Plug this function in Trainer class after loss.backwards() as 
+    "plot_grad_flow(self.model.named_parameters())" to visualize the gradient flow'''
+    ave_grads = []
+    max_grads= []
+    layers = []
+    for n, p in named_parameters:
+        if(p.requires_grad) and ("bias" not in n):
+            layers.append(n)
+            ave_grads.append(p.grad.abs().mean())
+            max_grads.append(p.grad.abs().max())
+    plt.figure(figsize=(25, 10))
+    plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
+    plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
+    plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k" )
+    plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+    plt.xlim(left=0, right=len(ave_grads))
+    plt.ylim(bottom = 0.0, top=min(0.02, max(max_grads))) # zoom in on the lower gradient regions
+    plt.xlabel("Layers")
+    plt.ylabel("average gradient")
+    plt.title("Gradient flow")
+    plt.grid(True)
+    plt.legend([Line2D([0], [0], color="c", lw=4),
+                Line2D([0], [0], color="b", lw=4),
+                Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
+    plt.draw()
+    return wandb.Image(plt)
 
 
 def compute_metrics(predictions, targets):
