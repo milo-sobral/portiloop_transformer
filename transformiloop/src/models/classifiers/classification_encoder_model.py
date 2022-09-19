@@ -60,7 +60,7 @@ class ClassificationModel(nn.Module):
                     d_model,
                     dim_ff,
                     dropout,
-                    'relu',
+                    'gelu',
                 )
                 for _ in range(n_layers)
             ],

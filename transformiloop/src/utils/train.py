@@ -47,15 +47,15 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
         dtypes=[torch.float, torch.float, torch.bool],
         depth=3,
     ))
-    logging.debug(summary(
-        encoder,
-        input_size=[
-            (config['batch_size'], 1, config['window_size']),
-            (config['batch_size'], 1, config['window_size'])
-        ],
-        dtypes=[torch.float, torch.float, torch.bool],
-        depth=3,
-    ))
+    # logging.debug(summary(
+    #     encoder,
+    #     input_size=[
+    #         (config['batch_size'], 1, config['window_size']),
+    #         (config['batch_size'], 1, config['window_size'])
+    #     ],
+    #     dtypes=[torch.float, torch.float, torch.bool],
+    #     depth=3,
+    # ))
     classifier.to(config['device'])
 
     # Load data
@@ -110,23 +110,23 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
             param.requires_grad = False
 
     # Initial validation 
-    val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
-            encoder, val_dl, config, classifier, config['device'])
-    loggable_dict = {
-        "Validation Loss": val_loss,
-        "Validation Accuracy": val_acc,
-        "Validation F1": val_f1,
-        "Validation Recall": val_rec,
-        "Validation Precision": val_prec,
-        "Validation Confusion Matrix": val_cm
-    }
-    logger.log(loggable_dict=loggable_dict)
+    # val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
+    #         encoder, val_dl, config, classifier, config['device'])
+    # loggable_dict = {
+    #     "Validation Loss": val_loss,
+    #     "Validation Accuracy": val_acc,
+    #     "Validation F1": val_f1,
+    #     "Validation Recall": val_rec,
+    #     "Validation Precision": val_prec,
+    #     "Validation Confusion Matrix": val_cm
+    # }
+    # logger.log(loggable_dict=loggable_dict)
 
     # Start of finetuning loop
     for epoch in range(config['epochs']):
         logging.debug(f"Starting epoch #{epoch}")
         print(f"Starting epoch #{epoch}")
-        train_loss, train_acc, train_f1, train_rec, train_prec, train_cm = finetune_epoch(
+        train_loss, train_acc, train_f1, train_rec, train_prec, train_cm, grads_flow = finetune_epoch(
             encoder, config['optimizer'], train_dl, config, config['device'], classifier, config['classifier_optimizer'])
         val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
             encoder, val_dl, config, classifier, config['device'])
@@ -137,6 +137,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
             "Training Recall": train_rec,
             "Training Precision": train_prec,
             "Training Confusion Matrix": train_cm,
+            "Training Gradients Flow": grads_flow,
             "Validation Loss": val_loss,
             "Validation Accuracy": val_acc,
             "Validation F1": val_f1,
