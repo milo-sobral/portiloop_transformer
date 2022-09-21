@@ -18,5 +18,7 @@ setup(name='transformiloop',
         'sklearn',
         'pandas',
         'pytorch-fast-transformers',
-        'torchmetrics']
+        'torchmetrics',
+        'py3nvml',
+        'nvidia-ml-py3']
      )

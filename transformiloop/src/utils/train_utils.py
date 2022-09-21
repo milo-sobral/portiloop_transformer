@@ -8,6 +8,10 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import logging
 import wandb
+import gc
+from transformiloop.src.utils.gpu_profiling import get_tensors
+import pprint
+import nvidia_smi
 
 def save_model(save_path, model, config):
     if not os.path.exists(save_path):
@@ -74,7 +78,6 @@ def pretrain_epoch(model, model_optimizer, train_loader, config, device):
 
     return total_loss, loss_t, loss_f, loss_c
 
-
 def finetune_epoch(model, model_optim, dataloader, config, device, classifier, classifier_optim):
     model.train()
     classifier.train()
@@ -84,8 +87,6 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
     all_targets = []
 
     classification_criterion = nn.BCEWithLogitsLoss()
-    nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['temperature'],
-                                        config['use_cosine_similarity'])
 
     for batch_idx, batch in enumerate(dataloader):
         
@@ -97,20 +98,24 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
             print(f"Training batch {batch_idx}")
 
         loss, _, predictions = simple_run_finetune_batch(
-            batch, model, classifier, nt_xent_criterion, classification_criterion, config['threshold'], config['lam'], device)
-
-        all_preds.append(predictions)
-        all_targets.append(batch[2])
+            batch, classifier, classification_criterion, config['threshold'], config['lam'], device)
 
         # Optimize parameters
         loss.backward()
+
         if batch_idx == 0:
             plot_gradients = plot_grad_flow(classifier.cpu().named_parameters())
         classifier = classifier.to(device)
+
+
         model_optim.step()
         classifier_optim.step()
+
         with torch.no_grad():
+            all_preds.append(predictions.detach().cpu())
+            all_targets.append(batch[2])
             total_loss.append(loss.cpu().item())
+    
     with torch.no_grad():
         acc, f1, recall, precision, cm = compute_metrics(torch.stack(
             all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
@@ -120,6 +125,7 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
 
 def finetune_test_epoch(model, dataloader, config, classifier, device):
     with torch.no_grad():
+        
         model.eval()
         classifier.eval()
 
@@ -128,8 +134,8 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
         total_loss = []
 
         classification_criterion = nn.BCEWithLogitsLoss()
-        nt_xent_criterion = NTXentLoss_poly(device, config['val_batch_size'], config['temperature'],
-                                            config['use_cosine_similarity'])
+        # nt_xent_criterion = NTXentLoss_poly(device, config['val_batch_size'], config['temperature'],
+        #                                     config['use_cosine_similarity'])
 
         for batch_idx, batch in enumerate(dataloader):
             if batch_idx % config['log_every'] == 0:
@@ -138,8 +144,8 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
 
             # Run through model
             loss, _, predictions = simple_run_finetune_batch(
-                batch, model, classifier, nt_xent_criterion, classification_criterion, config['threshold'], config['lam'], device)
-            all_preds.append(predictions)
+                batch, classifier, classification_criterion, config['threshold'], config['lam'], device)
+            all_preds.append(predictions.detach().cpu())
             all_targets.append(batch[2])
             total_loss.append(loss.cpu().item())
 
@@ -150,7 +156,7 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
 
 
-def simple_run_finetune_batch(batch, model, classifier, model_loss, loss, threshold, lam, device):
+def simple_run_finetune_batch(batch, classifier, loss, threshold, lam, device):
     seqs, _, labels, _, _ = batch
     seqs = seqs.to(device)
     labels = labels.to(device)
@@ -232,7 +238,7 @@ def plot_grad_flow(named_parameters):
     plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k" )
     plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
     plt.xlim(left=0, right=len(ave_grads))
-    plt.ylim(bottom = 0.0, top=min(0.02, max(max_grads))) # zoom in on the lower gradient regions
+    plt.ylim(bottom = 0.0, top=max(max_grads)) # zoom in on the lower gradient regions
     plt.xlabel("Layers")
     plt.ylabel("average gradient")
     plt.title("Gradient flow")
@@ -269,3 +275,25 @@ def compute_metrics(predictions, targets):
     accuracy = (sum(tp) + sum(tn)) / (sum(tp) + sum(tn) + sum(fn) + sum(fp))
 
     return accuracy.mean(), f1, recall, precision, confusion_matrix
+
+
+def count_shapes(tensor_list):
+    init_shapes = {}
+    for tensor in tensor_list:
+        if str(tensor.shape) not in init_shapes.keys():
+            init_shapes[str(tensor.shape)] = 0
+        else:
+            init_shapes[str(tensor.shape)] += 1
+    return init_shapes
+
+
+def nvidia_info():
+    nvidia_smi.nvmlInit()
+
+    deviceCount = nvidia_smi.nvmlDeviceGetCount()
+    for i in range(deviceCount):
+        handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
+        info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+        print("Device {}: {}, Memory : ({:.2f}% free): {}(total), {} (free), {} (used)".format(i, nvidia_smi.nvmlDeviceGetName(handle), 100*info.free/info.total, info.total, info.free, info.used))
+
+    nvidia_smi.nvmlShutdown()
