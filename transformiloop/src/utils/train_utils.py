@@ -78,27 +78,6 @@ def pretrain_epoch(model, model_optimizer, train_loader, config, device):
 
     return total_loss, loss_t, loss_f, loss_c
 
-def count_shapes(tensor_list):
-    init_shapes = {}
-    for tensor in tensor_list:
-        if str(tensor.shape) not in init_shapes.keys():
-            init_shapes[str(tensor.shape)] = 0
-        else:
-            init_shapes[str(tensor.shape)] += 1
-    return init_shapes
-
-
-def nvidia_info():
-    nvidia_smi.nvmlInit()
-
-    deviceCount = nvidia_smi.nvmlDeviceGetCount()
-    for i in range(deviceCount):
-        handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
-        info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
-        print("Device {}: {}, Memory : ({:.2f}% free): {}(total), {} (free), {} (used)".format(i, nvidia_smi.nvmlDeviceGetName(handle), 100*info.free/info.total, info.total, info.free, info.used))
-
-    nvidia_smi.nvmlShutdown()
-
 def finetune_epoch(model, model_optim, dataloader, config, device, classifier, classifier_optim):
     model.train()
     classifier.train()
@@ -108,15 +87,8 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
     all_targets = []
 
     classification_criterion = nn.BCEWithLogitsLoss()
-    # nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['temperature'],
-    #                                     config['use_cosine_similarity'])
 
     for batch_idx, batch in enumerate(dataloader):
-        print("BATCH START")
-        nvidia_info()
-        
-        if batch_idx == 1:
-            initial_tensors = list(get_tensors())
         
         model_optim.zero_grad()
         classifier_optim.zero_grad()
@@ -127,36 +99,23 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
 
         loss, _, predictions = simple_run_finetune_batch(
             batch, classifier, classification_criterion, config['threshold'], config['lam'], device)
-        nvidia_info()
 
         # Optimize parameters
         loss.backward()
-        nvidia_info()
 
         if batch_idx == 0:
             plot_gradients = plot_grad_flow(classifier.cpu().named_parameters())
         classifier = classifier.to(device)
 
-        nvidia_info()
 
         model_optim.step()
         classifier_optim.step()
-        nvidia_info()
 
         with torch.no_grad():
             all_preds.append(predictions.detach().cpu())
             all_targets.append(batch[2])
             total_loss.append(loss.cpu().item())
-        del(loss)
-        nvidia_info()
-
-
-    final_tensors = list(get_tensors())
-
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(count_shapes(initial_tensors))
-    pp.pprint(count_shapes(final_tensors))
-
+    
     with torch.no_grad():
         acc, f1, recall, precision, cm = compute_metrics(torch.stack(
             all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
@@ -179,9 +138,6 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
         #                                     config['use_cosine_similarity'])
 
         for batch_idx, batch in enumerate(dataloader):
-            if batch_idx == 1:
-                initial_tensors = list(get_tensors())
-
             if batch_idx % config['log_every'] == 0:
                 logging.debug(f"Validation batch {batch_idx}")
                 print(f"Validation batch {batch_idx}")
@@ -192,12 +148,6 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
             all_preds.append(predictions.detach().cpu())
             all_targets.append(batch[2])
             total_loss.append(loss.cpu().item())
-        
-        final_tensors = list(get_tensors())
-
-        pp = pprint.PrettyPrinter(indent=4)
-        pp.pprint(count_shapes(initial_tensors))
-        pp.pprint(count_shapes(final_tensors))
 
         acc, f1, recall, precision, cm = compute_metrics(torch.stack(
             all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
@@ -325,3 +275,25 @@ def compute_metrics(predictions, targets):
     accuracy = (sum(tp) + sum(tn)) / (sum(tp) + sum(tn) + sum(fn) + sum(fp))
 
     return accuracy.mean(), f1, recall, precision, confusion_matrix
+
+
+def count_shapes(tensor_list):
+    init_shapes = {}
+    for tensor in tensor_list:
+        if str(tensor.shape) not in init_shapes.keys():
+            init_shapes[str(tensor.shape)] = 0
+        else:
+            init_shapes[str(tensor.shape)] += 1
+    return init_shapes
+
+
+def nvidia_info():
+    nvidia_smi.nvmlInit()
+
+    deviceCount = nvidia_smi.nvmlDeviceGetCount()
+    for i in range(deviceCount):
+        handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
+        info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+        print("Device {}: {}, Memory : ({:.2f}% free): {}(total), {} (free), {} (used)".format(i, nvidia_smi.nvmlDeviceGetName(handle), 100*info.free/info.total, info.total, info.free, info.used))
+
+    nvidia_smi.nvmlShutdown()
