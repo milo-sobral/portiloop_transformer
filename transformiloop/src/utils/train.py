@@ -39,7 +39,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
 
     # Load models
     classifier, encoder = get_encoder_classifier_TFC(config)
-    logging.debug(summary(
+    print(summary(
         classifier,
         input_size=[
             (config['batch_size'], config['seq_len'], config['d_model'])
