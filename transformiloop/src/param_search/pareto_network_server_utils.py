@@ -146,7 +146,7 @@ def get_connected_socket(timeout, ip_connect, port_connect):
     try:
         s.connect((ip_connect, port_connect))
     except OSError:  # connection broken or timeout
-        logging.debug(f"INFO: connect() timed-out or failed, sleeping {WAIT_BEFORE_RECONNECTION}s")
+        logging.debug(f"connect() timed-out or failed, sleeping {WAIT_BEFORE_RECONNECTION}s")
         s.close()
         time.sleep(WAIT_BEFORE_RECONNECTION)
         return None
@@ -165,7 +165,7 @@ def accept_or_close_socket(s):
         conn.settimeout(SOCKET_TIMEOUT_COMMUNICATE)
         return conn, addr
     except OSError:
-        # logging.debug(f"INFO: accept() timed-out or failed, sleeping {WAIT_BEFORE_RECONNECTION}s")
+        # logging.debug(f"accept() timed-out or failed, sleeping {WAIT_BEFORE_RECONNECTION}s")
         if conn is not None:
             conn.close()
         s.close()
@@ -182,15 +182,15 @@ def select_and_send_or_close_socket(obj, conn):
     _, wl, xl = select.select([], [conn], [conn], SELECT_TIMEOUT_OUTBOUND)  # select for writing
     # logging.debug(f"end select")
     if len(xl) != 0:
-        logging.debug("INFO: error when writing, closing socket")
+        logging.debug("error when writing, closing socket")
         conn.close()
         return False
     if len(wl) == 0:
-        logging.debug("INFO: outbound select() timed out, closing socket")
+        logging.debug("outbound select() timed out, closing socket")
         conn.close()
         return False
     elif not send_object(conn, obj):  # error or timeout
-        logging.debug("INFO: send_object() failed, closing socket")
+        logging.debug("send_object() failed, closing socket")
         conn.close()
         return False
     return True
@@ -203,14 +203,14 @@ def poll_and_recv_or_close_socket(conn):
     """
     rl, _, xl = select.select([conn], [], [conn], 0.0)  # polling read channel
     if len(xl) != 0:
-        logging.debug("INFO: error when polling, closing sockets")
+        logging.debug("error when polling, closing sockets")
         conn.close()
         return False, None
     if len(rl) == 0:  # nothing in the recv buffer
         return True, None
     obj = recv_object(conn)
     if obj is None:  # socket error
-        logging.debug("INFO: error when receiving object, closing sockets")
+        logging.debug("error when receiving object, closing sockets")
         conn.close()
         return False, None
     elif obj == 'PINGPONG':
@@ -239,8 +239,8 @@ class Server:
         self.public_ip = get('http://api.ipify.org').text
         self.local_ip = socket.gethostbyname(socket.gethostname())
 
-        logging.debug(f"INFO SERVER: local IP: {self.local_ip}")
-        logging.debug(f"INFO SERVER: public IP: {self.public_ip}")
+        logging.debug(f"SERVER: local IP: {self.local_ip}")
+        logging.debug(f"SERVER: public IP: {self.public_ip}")
 
         Thread(target=self.__workers_thread, args=('',), kwargs={}, daemon=True).start()
         Thread(target=self.__metas_thread, args=('',), kwargs={}, daemon=True).start()
@@ -256,7 +256,7 @@ class Server:
             if conn is None:
                 # logging.debug("accept_or_close_socket failed in trainers thread")
                 continue
-            logging.debug(f"INFO METAS THREAD: server connected by meta at address {addr}")
+            logging.debug(f"METAS THREAD: server connected by meta at address {addr}")
             Thread(target=self.__meta_thread, args=(conn,), kwargs={}, daemon=True).start()  # we don't keep track of this for now
             s.close()
 
@@ -283,14 +283,14 @@ class Server:
                             wait_ack = True
                             ack_time = time.time()
                         else:
-                            logging.debug("INFO: failed sending object to meta")
+                            logging.debug("failed sending object to meta")
                             self.__to_launch_lock.release()
                             break
                     else:
                         elapsed = time.time() - ack_time
-                        logging.debug(f"WARNING: object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
+                        logging.warning(f"object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
                         if elapsed >= ACK_TIMEOUT_SERVER_TO_META:
-                            logging.debug("INFO: ACK timed-out, breaking connection")
+                            logging.debug("ACK timed-out, breaking connection")
                             self.__to_launch_lock.release()
                             break
                 self.__to_launch_lock.release()  # END BUFFER LOCK.........................................................
@@ -301,13 +301,13 @@ class Server:
                 break
             elif obj is not None and obj != 'ACK' and obj != "ALIVE":
                 is_working = False
-                logging.debug(f"DEBUG INFO: meta thread received obj")
+                logging.debug(f"meta thread received obj")
                 self.__to_launch_lock.acquire()  # LOCK.......................................................
                 self.__to_launch.append(obj)
                 self.__to_launch_lock.release()  # END LOCK...................................................
             elif obj == 'ACK':
                 wait_ack = False
-                logging.debug(f"INFO: transfer acknowledgment received after {time.time() - ack_time}s")
+                logging.debug(f"transfer acknowledgment received after {time.time() - ack_time}s")
             time.sleep(LOOP_SLEEP_TIME)  # TODO: adapt
 
     def __workers_thread(self, ip):
@@ -321,7 +321,7 @@ class Server:
             if conn is None:
                 logging.debug("No incoming connection in workers thread")
                 continue
-            logging.debug(f"INFO WORKERS THREAD: server connected by worker at address {addr}")
+            logging.debug(f"WORKERS THREAD: server connected by worker at address {addr}")
             Thread(target=self.__worker_thread, args=(conn,), kwargs={}, daemon=True).start()  # we don't keep track of this for now
             s.close()
 
@@ -350,9 +350,9 @@ class Server:
                             break
                     else:
                         elapsed = time.time() - ack_time
-                        logging.debug(f"INFO: object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
+                        logging.debug(f"object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
                         if elapsed >= ACK_TIMEOUT_SERVER_TO_WORKER:
-                            logging.debug("INFO: ACK timed-out, breaking connection")
+                            logging.debug("ACK timed-out, breaking connection")
                             self.__to_launch_lock.release()
                             break
                 self.__to_launch_lock.release()  # END WEIGHTS LOCK...........................................................
@@ -363,13 +363,13 @@ class Server:
                 break
             elif obj is not None and obj != 'ACK' and obj != "ALIVE":
                 is_working = False
-                logging.debug(f"DEBUG INFO: worker thread received obj")
+                logging.debug(f"worker thread received obj")
                 self.__finished_lock.acquire()  # BUFFER LOCK.............................................................
                 self.__finished.append(obj)
                 self.__finished_lock.release()  # END BUFFER LOCK.........................................................
             elif obj == 'ACK':
                 wait_ack = False
-                logging.debug(f"INFO: transfer acknowledgment received after {time.time() - ack_time}s")
+                logging.debug(f"transfer acknowledgment received after {time.time() - ack_time}s")
             time.sleep(LOOP_SLEEP_TIME)
 
 
