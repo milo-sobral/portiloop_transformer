@@ -17,7 +17,7 @@ DEFAULT_CONFIG = {
     # Data params
     'batch_size' : 32,
     'seq_len': 512,
-    'window_size': 32,
+    'window_size': 256,
     'seq_stride': 1,
     'val_batch_size': 350,
     'val_dividing_factor': 20,
@@ -25,13 +25,13 @@ DEFAULT_CONFIG = {
     'batches_per_epoch': 500,
 
     # Transformers Params 
-    'd_model': 32,
+    'd_model': 256,
     'n_heads': 8,
-    'dim_ff': 256,
+    'dim_ff': 1024,
     'n_layers': 6,
     'latent_dim': 32,
-    'q_dim': 32,
-    'v_dim': 32,
+    'q_dim': 256,
+    'v_dim': 256,
 
     # Training params
     'max_duration': int(71.5 * 3600),
