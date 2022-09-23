@@ -8,10 +8,6 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import logging
 import wandb
-import gc
-from transformiloop.src.utils.gpu_profiling import get_tensors
-import pprint
-import nvidia_smi
 
 def save_model(save_path, model, config):
     if not os.path.exists(save_path):

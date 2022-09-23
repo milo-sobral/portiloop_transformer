@@ -377,3 +377,41 @@ class FullAttention(nn.Module):
 
         # Make sure that what we return is contiguous
         return V.contiguous()
+
+
+class ConvPoolModule(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 out_channel,
+                 kernel_conv,
+                 stride_conv,
+                 conv_padding,
+                 dilation_conv,
+                 kernel_pool,
+                 stride_pool,
+                 pool_padding,
+                 dilation_pool,
+                 dropout_p):
+        super(ConvPoolModule, self).__init__()
+
+        self.conv = nn.Conv1d(in_channels=in_channels,
+                              out_channels=out_channel,
+                              kernel_size=kernel_conv,
+                              stride=stride_conv,
+                              padding=conv_padding,
+                              dilation=dilation_conv)
+        self.pool = nn.MaxPool1d(kernel_size=kernel_pool,
+                                 stride=stride_pool,
+                                 padding=pool_padding,
+                                 dilation=dilation_pool)
+        self.dropout = nn.Dropout(dropout_p)
+
+    def forward(self, input_f):
+        x, max_value = input_f
+        x = F.relu(self.conv(x))
+        x = self.pool(x)
+        max_temp = torch.max(abs(x))
+        if max_temp > max_value:
+            logging.debug(f"max_value = {max_temp}")
+            max_value = max_temp
+        return self.dropout(x), max_value

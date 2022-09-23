@@ -33,6 +33,13 @@ DEFAULT_CONFIG = {
     'q_dim': 256,
     'v_dim': 256,
 
+    # CNN Params:
+    'use_cnn_encoder': False,
+    'cnn_num_layers': 3,
+    'cnn_in_channels': 1,
+    'cnn_kernel_size': 4,
+    'cnn_stride_conv': 2
+
     # Training params
     'max_duration': int(71.5 * 3600),
     'threshold': 0.5, 
