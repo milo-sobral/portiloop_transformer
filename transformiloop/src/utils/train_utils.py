@@ -12,6 +12,7 @@ import gc
 from transformiloop.src.utils.gpu_profiling import get_tensors
 import pprint
 import nvidia_smi
+from torch.optim.lr_scheduler import _LRScheduler
 
 def save_model(save_path, model, config):
     if not os.path.exists(save_path):
@@ -78,7 +79,7 @@ def pretrain_epoch(model, model_optimizer, train_loader, config, device):
 
     return total_loss, loss_t, loss_f, loss_c
 
-def finetune_epoch(model, model_optim, dataloader, config, device, classifier, classifier_optim):
+def finetune_epoch(model, model_optim, dataloader, config, device, classifier, classifier_optim, scheduler):
     model.train()
     classifier.train()
 
@@ -107,7 +108,7 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
             plot_gradients = plot_grad_flow(classifier.cpu().named_parameters())
         classifier = classifier.to(device)
 
-
+        scheduler.step()
         model_optim.step()
         classifier_optim.step()
 
@@ -297,3 +298,18 @@ def nvidia_info():
         print("Device {}: {}, Memory : ({:.2f}% free): {}(total), {} (free), {} (used)".format(i, nvidia_smi.nvmlDeviceGetName(handle), 100*info.free/info.total, info.total, info.free, info.used))
 
     nvidia_smi.nvmlShutdown()
+
+class WarmupTransformerLR(_LRScheduler):
+    def __init__(self, optimizer, warmup_steps, target_lr, decay, last_epoch=-1, verbose=False):
+        self.warmup_steps = warmup_steps
+        self.target_lr = target_lr
+        self.slope = target_lr / warmup_steps
+        self.decay = decay
+        super(WarmupTransformerLR, self).__init__(optimizer, last_epoch, verbose)
+
+    def get_lr(self):
+        x = self.last_epoch + 1
+        if x <= self.warmup_steps:
+            return [(x * self.slope) for group in self.optimizer.param_groups]
+        else:
+            return [(group['lr'] * self.decay) for group in self.optimizer.param_groups]
