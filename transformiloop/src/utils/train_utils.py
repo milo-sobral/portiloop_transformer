@@ -99,7 +99,7 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
             print(f"Training batch {batch_idx}")
 
         loss, _, predictions = simple_run_finetune_batch(
-            batch, classifier, classification_criterion, config['threshold'], config['lam'], device)
+            batch, classifier, classification_criterion, config, device)
 
         # Optimize parameters
         loss.backward()
@@ -145,7 +145,7 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
 
             # Run through model
             loss, _, predictions = simple_run_finetune_batch(
-                batch, classifier, classification_criterion, config['threshold'], config['lam'], device)
+                batch, classifier, classification_criterion, config, device)
             all_preds.append(predictions.detach().cpu())
             all_targets.append(batch[2])
             total_loss.append(loss.cpu().item())
@@ -157,13 +157,15 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
 
 
-def simple_run_finetune_batch(batch, classifier, loss, threshold, lam, device):
+def simple_run_finetune_batch(batch, classifier, loss, config, device):
     seqs, _, labels, _, _ = batch
+    if config['duplicate_as_window']:
+        seqs = torch.ones(seqs.size()) * seqs[:, :, -1]
     seqs = seqs.to(device)
     labels = labels.to(device)
     logits = classifier(seqs).squeeze(-1) 
     loss = loss(logits, labels)
-    predictions = (torch.sigmoid(logits) > threshold).int()
+    predictions = (torch.sigmoid(logits) > config['threshold']).int()
     return loss, None, predictions
 
 
