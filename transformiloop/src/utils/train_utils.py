@@ -108,9 +108,9 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
             plot_gradients = plot_grad_flow(classifier.cpu().named_parameters())
         classifier = classifier.to(device)
 
-        scheduler.step()
         model_optim.step()
         classifier_optim.step()
+        scheduler.step()
 
         with torch.no_grad():
             all_preds.append(predictions.detach().cpu())
@@ -160,7 +160,9 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
 def simple_run_finetune_batch(batch, classifier, loss, config, device):
     seqs, _, labels, _, _ = batch
     if config['duplicate_as_window']:
-        seqs = torch.ones(seqs.size()) * seqs[:, :, -1]
+        A = torch.ones(seqs.size())
+        B = seqs[:, :, -1]
+        seqs = A * B.unsqueeze(-1)
     seqs = seqs.to(device)
     labels = labels.to(device)
     logits = classifier(seqs).squeeze(-1) 
