@@ -43,7 +43,7 @@ DEFAULT_CONFIG = {
     'warmup_steps': 4000,
     'lr_decay': 0.9999,
     'log_every': 50,
-    'dropout': 0.2,
+    'dropout': 0.0,
     'epochs': 400,
     'epochs_pretrain': 30,
     'es_epochs': 100,
