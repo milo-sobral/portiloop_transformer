@@ -22,4 +22,4 @@ print(config)
 #     depth=3,
 # )
 
-run(config, 'experiment_lowlr_hw', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
+run(config, 'experiment_hilr_hw', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
