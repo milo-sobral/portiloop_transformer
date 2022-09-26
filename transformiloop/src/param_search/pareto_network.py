@@ -25,7 +25,7 @@ from requests import get
 from transformiloop.src.param_search.pareto_network_server_utils import Server, RECV_TIMEOUT_META_FROM_SERVER, SOCKET_TIMEOUT_CONNECT_META, PORT_META, RECV_TIMEOUT_WORKER_FROM_SERVER, \
     PORT_WORKER, SOCKET_TIMEOUT_CONNECT_WORKER, ACK_TIMEOUT_WORKER_TO_SERVER, IP_SERVER, ACK_TIMEOUT_META_TO_SERVER, select_and_send_or_close_socket, poll_and_recv_or_close_socket, get_connected_socket, LOOP_SLEEP_TIME_META, LOOP_SLEEP_TIME_WORKER, LOOP_SLEEP_TIME, SEND_ALIVE
 from transformiloop.src.param_search.pareto_search import LoggerWandbPareto, RUN_NAME, SurrogateModel, META_MODEL_DEVICE, train_surrogate, update_pareto, nb_parameters, MAX_NB_PARAMETERS, NB_SAMPLED_MODELS_PER_ITERATION, \
-    exp_max_pareto_efficiency, exp_min_software_cost, load_network_files, dump_network_files, transform_config_dict_to_input, WANDB_PROJECT_PARETO, PARETO_ID, MAXIMIZE_F1_SCORE
+    exp_max_pareto_efficiency, load_network_files, dump_network_files, transform_config_dict_to_input, WANDB_PROJECT_PARETO, PARETO_ID, MAXIMIZE_F1_SCORE
 
 from transformiloop.src.utils.train import run
 from transformiloop.src.utils.configs import compare_configs, sample_config_dict
@@ -40,12 +40,11 @@ class MetaLearner:
     This receives samples batches and sends new weights
     """
 
-    def __init__(self, server_ip=None, hardware_cost=False):
+    def __init__(self, server_ip=None):
         self.public_ip = get('http://api.ipify.org').text
         self.local_ip = socket.gethostbyname(socket.gethostname())
         self.server_ip = server_ip if server_ip is not None else '127.0.0.1'
         self.recv_timeout = RECV_TIMEOUT_META_FROM_SERVER
-        self._hardware_cost = hardware_cost
         self.__results_lock = Lock()
         self.__results = []
         self.__to_launch_lock = Lock()
@@ -92,11 +91,11 @@ class MetaLearner:
                             break
                     else:
                         elapsed = time.time() - ack_time
-                        logging.warning(
-                            f"object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
+                        logging.debug(
+                            f"WARNING: object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
                         if elapsed >= ACK_TIMEOUT_META_TO_SERVER:
                             logging.debug(
-                                "ACK timed-out, breaking connection")
+                                "INFO: ACK timed-out, breaking connection")
                             self.__to_launch_lock.release()
                             break
                 else:
@@ -115,11 +114,11 @@ class MetaLearner:
                                 break
                         else:
                             elapsed = time.time() - ack_time
-                            logging.warning(
-                                f"object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
+                            logging.debug(
+                                f"WARNING: object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
                             if elapsed >= ACK_TIMEOUT_META_TO_SERVER:
                                 logging.debug(
-                                    "ACK timed-out, breaking connection")
+                                    "INFO: ACK timed-out, breaking connection")
                                 self.__to_launch_lock.release()
                                 break
                 # END LOCK.......................................................
@@ -130,7 +129,7 @@ class MetaLearner:
                     logging.debug("poll failed in Meta thread")
                     break
                 elif obj is not None and obj != 'ACK':  # received finished
-                    logging.debug(f"Meta interface received obj")
+                    logging.debug(f"DEBUG INFO: Meta interface received obj")
                     recv_time = time.time()
                     # LOCK.........................................................
                     self.__results_lock.acquire()
@@ -144,7 +143,7 @@ class MetaLearner:
                     recv_time = time.time()
                     wait_ack = False
                     logging.debug(
-                        f"transfer acknowledgment received after {time.time() - ack_time}s")
+                        f"INFO: transfer acknowledgment received after {time.time() - ack_time}s")
                 elif time.time() - recv_time > self.recv_timeout:
                     logging.debug(
                         f"Timeout in Meta, not received anything for too long")
@@ -267,10 +266,8 @@ class MetaLearner:
                     if len(exps) >= NB_SAMPLED_MODELS_PER_ITERATION:
                         # select model
                         model_selected = True
-                        if self._hardware_cost:  # minimize the Pareto tradeoff between hardware and software
-                            exp = exp_max_pareto_efficiency(exps, pareto_front, finished_experiments)
-                        else:  # minimize only the software cost (loss)
-                            exp = exp_min_software_cost(exps)
+                        exp = exp_max_pareto_efficiency(
+                            exps, pareto_front, finished_experiments)
 
                 logging.debug(f"config: {exp['config_dict']}")
                 logging.debug(f"nb parameters: {exp['cost_hardware']}")
@@ -353,10 +350,10 @@ class Worker:
                     else:
                         elapsed = time.time() - ack_time
                         logging.debug(
-                            f"object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
+                            f"WARNING: object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
                         if elapsed >= ACK_TIMEOUT_WORKER_TO_SERVER:
                             logging.debug(
-                                "ACK timed-out, breaking connection")
+                                "INFO: ACK timed-out, breaking connection")
                             self.__finished_exp_lock.release()
                             break
                 else:
@@ -375,11 +372,11 @@ class Worker:
                                 break
                         else:
                             elapsed = time.time() - ack_time
-                            logging.warning(
-                                f"object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
+                            logging.debug(
+                                f"WARNING: object ready but ACK from last transmission not received. Elapsed:{elapsed}s")
                             if elapsed >= ACK_TIMEOUT_META_TO_SERVER:
                                 logging.debug(
-                                    "ACK timed-out, breaking connection")
+                                    "INFO: ACK timed-out, breaking connection")
                                 self.__finished_exp_lock.release()
                                 break
                 # END BUFFER LOCK.........................................................
@@ -387,10 +384,10 @@ class Worker:
                 # checks for new experiments to launch
                 success, obj = poll_and_recv_or_close_socket(s)
                 if not success:
-                    logging.debug(f"worker poll failed")
+                    logging.debug(f"INFO: worker poll failed")
                     break
                 elif obj is not None and obj != 'ACK':
-                    logging.debug(f"worker received obj")
+                    logging.debug(f"DEBUG INFO: worker received obj")
                     recv_time = time.time()
                     # LOCK.......................................................
                     self.__exp_to_run_lock.acquire()
@@ -401,7 +398,7 @@ class Worker:
                     recv_time = time.time()
                     wait_ack = False
                     logging.debug(
-                        f"transfer acknowledgment received after {time.time() - ack_time}s")
+                        f"INFO: transfer acknowledgment received after {time.time() - ack_time}s")
                 elif time.time() - recv_time > self.recv_timeout:
                     logging.debug(
                         f"Timeout in worker, not received anything for too long")
@@ -418,7 +415,7 @@ class Worker:
                 self.__exp_to_run_lock.release()
                 predicted_loss = exp['cost_software']
 
-                logging.info(f"Launch run with predicted cost: {predicted_loss}")
+                logging.debug("Launch run")
                 best_loss, best_f1_score, exp["best_epoch"] = run(
                     exp["config_dict"], f"{WANDB_PROJECT_PARETO}_runs_{PARETO_ID}", 
                     WANDB_PROJECT_PARETO, 
@@ -429,7 +426,6 @@ class Worker:
                 logging.debug("Run finished")
                 exp["cost_software"] = 1 - \
                     best_f1_score if MAXIMIZE_F1_SCORE else best_loss
-                logging.info(f"run finished with actual cost: {exp['cost_software']} (predicted: {predicted_loss})")
                 exp['surprise'] = exp["cost_software"] - predicted_loss
                 self.__finished_exp_lock.acquire()
                 logging.debug("Before copying exp result")
@@ -443,16 +439,16 @@ class Worker:
 
 def main(args, data_config=None):
     if args.server:
-        logging.debug("now running: server")
+        logging.debug("INFO: now running: server")
         Server()
     elif args.worker:
         Worker(data_config, server_ip=args.ip_server)
-        logging.debug("now running: worker")
+        logging.debug("INFO: now running: worker")
     elif args.meta:
         MetaLearner(server_ip=args.ip_server)
-        logging.debug("now running: meta")
+        logging.debug("INFO: now running: meta")
     else:
-        logging.debug("wrong argument")
+        logging.debug("ERROR: wrong argument")
     while True:
         time.sleep(10.0)
         pass

@@ -385,24 +385,6 @@ def exp_max_pareto_efficiency(experiments, pareto_front, all_experiments):
         return best_exp
 
 
-def exp_min_software_cost(experiments):
-    assert len(experiments) >= 1
-    noise = random.choices(population=[True, False], weights=[EPSILON_EXP_NOISE, 1.0 - EPSILON_EXP_NOISE])[0]
-    if noise:
-        return random.choice(experiments)
-    else:
-        min_cost = np.inf
-        best_exp = None
-        for exp in experiments:
-            cost = exp["cost_software"]
-            if cost <= min_cost:
-                min_cost = cost
-                best_exp = exp
-        assert best_exp is not None
-        logging.debug(f"selected best exp with software cost {best_exp['cost_software']}")
-        return best_exp
-
-
 def dump_files(all_experiments, pareto_front):
     """
     exports pickled files to path_pareto
@@ -491,7 +473,7 @@ class LoggerWandbPareto:
         self.wandb_run.finish()
 
 
-def iterative_training_local(minimize_hardware_cost=False):
+def iterative_training_local():
     logger = LoggerWandbPareto(RUN_NAME)
 
     all_experiments, pareto_front = load_network_files()
@@ -514,14 +496,13 @@ def iterative_training_local(minimize_hardware_cost=False):
 
     # main meta-learning procedure:
 
-    prev_exp = {}
-
     for meta_iteration in range(MAX_META_ITERATIONS):
         num_experiment = len(all_experiments)
         logging.debug("---")
         logging.debug(f"ITERATION N° {meta_iteration}")
 
         exp = {}
+        prev_exp = {}
         exps = []
         model_selected = False
         meta_model.eval()
@@ -530,7 +511,8 @@ def iterative_training_local(minimize_hardware_cost=False):
             exp = {}
 
             # sample model
-            config_dict, unrounded = sample_config_dict(RUN_NAME + "_" + str(num_experiment), prev_exp, all_experiments)
+            config_dict, unrounded = sample_config_dict(
+                name=RUN_NAME + "_" + str(num_experiment), previous_exp=prev_exp, all_exp=all_experiments)
 
             nb_params = nb_parameters(config_dict)
             if nb_params > MAX_NB_PARAMETERS or nb_params < MIN_NB_PARAMETERS:
@@ -551,10 +533,8 @@ def iterative_training_local(minimize_hardware_cost=False):
             if len(exps) >= NB_SAMPLED_MODELS_PER_ITERATION:
                 # select model
                 model_selected = True
-                if minimize_hardware_cost:  # minimize the Pareto tradeoff between hardware and software
-                    exp = exp_max_pareto_efficiency(exps, pareto_front, all_experiments)
-                else:  # minimize only the software cost (loss)
-                    exp = exp_min_software_cost(exps)
+                exp = exp_max_pareto_efficiency(
+                    exps, pareto_front, all_experiments)
 
         config_dict = exp["config_dict"]
         predicted_cost = exp["cost_software"]
@@ -566,15 +546,8 @@ def iterative_training_local(minimize_hardware_cost=False):
         logging.debug(f"predicted cost: {predicted_cost}")
         logging.debug("training...")
         # TODO: Get the dataconfig and the experiment config
-        # TODO Change this!
         best_loss, best_f1_score, exp["best_epoch"] = run(
-            config=exp["config_dict"],
-            wandb_group='group_test_colab',
-            wandb_project='Yann-DEBUG',
-            save_model=False,
-            unique_name=True,
-            pretrain=False,
-            finetune_encoder=True)
+            exp["config_dict"], f"{WANDB_PROJECT_PARETO}_runs_{PARETO_ID}", save_model=False, unique_name=True) # TODO Change this!
         exp["cost_software"] = 1 - \
             best_f1_score if MAXIMIZE_F1_SCORE else best_loss
 
