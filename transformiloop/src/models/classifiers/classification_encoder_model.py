@@ -1,3 +1,6 @@
+import math
+from tkinter import E
+from xml.etree.ElementPath import xpath_tokenizer_re
 from torch import tensor
 import torch.nn.functional as F
 import torch
@@ -12,6 +15,8 @@ from transformiloop.src.models.masking import FullMask, LengthMask
 from einops import rearrange
 from math import sqrt
 from copy import deepcopy
+
+from transformiloop.src.utils.configs import EncodingTypes
 
 
 class ClassificationModel(nn.Module):
@@ -76,7 +81,13 @@ class ClassificationModel(nn.Module):
         self.flatten = nn.Flatten()
         self.classifier = nn.Linear(d_model * config['seq_len'], 1)
         self.pos_encoder = PositionalEncoding(d_model, device=device, dropout=dropout)
-
+        
+        self.encoder = build_encoder_module(config) if config['use_cnn_encoder'] else None
+        self.window_size = config['window_size']
+        self.encoding_type = config['encoding_type'] 
+        self.one_hot_tensor_train = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['batch_size'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
+        self.one_hot_tensor_val = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['val_batch_size'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
+        
 
     def forward(self, x: tensor):
         """_summary_
@@ -89,17 +100,33 @@ class ClassificationModel(nn.Module):
             x_rec (tensor): Output tensor of Dimension [batch_size, seq_len] after going through the Autoencoder model
         """
 
+        # Encode windows using CNN based model
+        if self.encoder is not None:
+            b = x.size(0)
+            s = x.size(1)
+            x = x.view(-1, self.window_size).unsqueeze(1)
+            x = self.encoder(x)
+            x = x.view(b, s, -1)
+
         # Positional encoding
-        x = rearrange(x, 'b s e -> s b e')
-        x = self.pos_encoder(x)
-        x = rearrange(x, 's b e -> b s e')
+        if self.encoding_type == EncodingTypes.POSITIONAL_ENCODING:
+            x = rearrange(x, 'b s e -> s b e')
+            x = self.pos_encoder(x)
+            x = rearrange(x, 's b e -> b s e')
+        elif self.encoding_type == EncodingTypes.ONE_HOT_ENCODING:
+            if x.size(0) == self.one_hot_tensor_train.size(0):
+                x = torch.cat((x, self.one_hot_tensor_train), -1)
+            elif x.size(0) == self.one_hot_tensor_val.size(0):
+                x = torch.cat((x, self.one_hot_tensor_val), -1)
+            else:
+                raise ValueError("Missing batch size in one hot encoding.")
 
         # Go through feature extractor
         x = self.transformer_extractor(x)
 
         # Get latent vector
-        # x = self.latent(x)
         x = self.flatten(x)
+    
         # # Generate output signal from latent vector
         x = self.classifier(x)
         return x
@@ -377,3 +404,70 @@ class FullAttention(nn.Module):
 
         # Make sure that what we return is contiguous
         return V.contiguous()
+
+
+def build_encoder_module(config):
+    # Checking if verification of CNN layers' dimensions has been previously done
+    layers = []
+    assert config['cnn_linear_size'] > 0, "Error in config, make sure to verify CNN sizes before generating model."
+
+    # Generating the CNN layers
+    in_channels = config['cnn_in_channels']
+    for _ in range(config['cnn_num_layers']):
+        out_channels = config['cnn_channels_multiplier'] * in_channels
+        layers.append(ConvPoolModule(
+            in_channels=in_channels,
+            out_channel=out_channels,
+            kernel_conv=config['cnn_kernel_size'],
+            stride_conv=config['cnn_stride_conv'],
+            conv_padding=config['cnn_padding'],
+            dilation_conv=config['cnn_dilation'],
+            kernel_pool=config['pool_kernel_size'],
+            stride_pool=config['pool_stride_conv'],
+            pool_padding=config['pool_padding'],
+            dilation_pool=config['pool_dilation'],
+            dropout_p=config['dropout']
+        ))
+        in_channels = out_channels
+    
+    # Generating Linear to project CNN output onto d_model
+    layers.append(nn.Flatten())
+    layers.append(nn.Linear(config['cnn_linear_size'], config['embedding_size']))
+    layers.append(nn.ReLU())
+    model = nn.Sequential()
+    for l in layers:
+        model.append(l)
+    return model
+
+
+class ConvPoolModule(nn.Module):
+    def __init__(self,
+                 in_channels,
+                 out_channel,
+                 kernel_conv,
+                 stride_conv,
+                 conv_padding,
+                 dilation_conv,
+                 kernel_pool,
+                 stride_pool,
+                 pool_padding,
+                 dilation_pool,
+                 dropout_p):
+        super(ConvPoolModule, self).__init__()
+
+        self.conv = nn.Conv1d(in_channels=in_channels,
+                              out_channels=out_channel,
+                              kernel_size=kernel_conv,
+                              stride=stride_conv,
+                              padding=conv_padding,
+                              dilation=dilation_conv)
+        self.pool = nn.MaxPool1d(kernel_size=kernel_pool,
+                                 stride=stride_pool,
+                                 padding=pool_padding,
+                                 dilation=dilation_pool)
+        self.dropout = nn.Dropout(dropout_p)
+
+    def forward(self, x):
+        x = F.relu(self.conv(x))
+        x = self.pool(x)
+        return self.dropout(x)

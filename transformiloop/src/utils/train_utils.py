@@ -8,10 +8,6 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import logging
 import wandb
-import gc
-from transformiloop.src.utils.gpu_profiling import get_tensors
-import pprint
-import nvidia_smi
 from torch.optim.lr_scheduler import _LRScheduler
 
 def save_model(save_path, model, config):
@@ -79,8 +75,7 @@ def pretrain_epoch(model, model_optimizer, train_loader, config, device):
 
     return total_loss, loss_t, loss_f, loss_c
 
-def finetune_epoch(model, model_optim, dataloader, config, device, classifier, classifier_optim, scheduler):
-    model.train()
+def finetune_epoch(dataloader, config, device, classifier, classifier_optim, scheduler):
     classifier.train()
 
     total_loss = []
@@ -91,7 +86,6 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
 
     for batch_idx, batch in enumerate(dataloader):
         
-        model_optim.zero_grad()
         classifier_optim.zero_grad()
 
         if batch_idx % config['log_every'] == 0:
@@ -108,7 +102,6 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
             plot_gradients = plot_grad_flow(classifier.cpu().named_parameters())
         classifier = classifier.to(device)
 
-        model_optim.step()
         classifier_optim.step()
         scheduler.step()
 
@@ -124,10 +117,9 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm, plot_gradients
 
 
-def finetune_test_epoch(model, dataloader, config, classifier, device):
+def finetune_test_epoch(dataloader, config, classifier, device):
     with torch.no_grad():
         
-        model.eval()
         classifier.eval()
 
         all_preds = []
@@ -135,8 +127,6 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
         total_loss = []
 
         classification_criterion = nn.BCEWithLogitsLoss()
-        # nt_xent_criterion = NTXentLoss_poly(device, config['val_batch_size'], config['temperature'],
-        #                                     config['use_cosine_similarity'])
 
         for batch_idx, batch in enumerate(dataloader):
             if batch_idx % config['log_every'] == 0:
@@ -152,76 +142,24 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
 
         acc, f1, recall, precision, cm = compute_metrics(torch.stack(
             all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
-        # print(f"Accuracy: {acc*100}\nF1-score: {f1*100}\nRecall: {recall*100}\nPrecision: {precision*100}\nConfusion Matrix: {cm}")
 
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
 
 
 def simple_run_finetune_batch(batch, classifier, loss, config, device):
     seqs, _, labels, _, _ = batch
+
     if config['duplicate_as_window']:
         A = torch.ones(seqs.size())
         B = seqs[:, :, -1]
-        seqs = A * B.unsqueeze(-1)
+        seqs = A * B.unsqueeze(-1)        
+
     seqs = seqs.to(device)
     labels = labels.to(device)
     logits = classifier(seqs).squeeze(-1) 
     loss = loss(logits, labels)
     predictions = (torch.sigmoid(logits) > config['threshold']).int()
     return loss, None, predictions
-
-
-def run_finetune_batch(batch, model, classifier, model_loss, class_loss, threshold, lam, device):
-    # loss_c = None
-    # loss_t = None
-    # loss_f = None
-
-    encoded = []
-    seqs, freqs, labels, seq_augs, freq_augs = batch
-    seqs, freqs = seqs.float().to(device), freqs.float().to(device)
-    seq_augs, freq_augs = seq_augs.float().to(device), freq_augs.float().to(device)
-
-    # Run through encoder model
-    for i in range(seqs.size(1)):
-        seq = seqs[:, i, :].unsqueeze(1)
-        freq = freqs[:, i, :].unsqueeze(1)
-        # seq_aug = seq_augs[:, :, i, :]
-        # freq_aug = freq_augs[:, :, i, :]
-
-        h_t, z_t, h_f, z_f = model(seq, freq)
-        # h_t_aug, z_t_aug, h_f_aug, z_f_aug = model(seq_aug, freq_aug)
-
-        # l_TF = model_loss(z_t, z_f)
-        # l_1, l_2, l_3 = model_loss(z_t, z_f_aug), model_loss(
-        #     z_t_aug, z_f), model_loss(z_t_aug, z_f_aug)
-
-        # if loss_c is None:
-        #     loss_c = (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
-        #     loss_t = model_loss(h_t, h_t_aug)
-        #     loss_f = model_loss(h_f, h_f_aug)
-        # else:
-        #     loss_c += (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
-        #     loss_t += model_loss(h_t, h_t_aug).item()
-        #     loss_f += model_loss(h_f, h_f_aug).item()
-
-        fea_concat = torch.cat((z_t, z_f), dim=1)
-        encoded.append(fea_concat)
-
-    # Run through classifier
-    encoded = torch.stack(encoded, dim=1)
-    logits = classifier(encoded).squeeze(-1)  # Run trhough transformer model
-    # predictor loss, actually, here is training loss
-    loss = class_loss(logits, labels.to(device))
-
-    # Final loss taking into account all portions
-    # loss_c /= seqs.size(1)
-    # loss_t /= seqs.size(1)
-    # loss_f /= seqs.size(1)
-    # loss = loss_p + (1-lam) * loss_c + lam * (loss_t + loss_f)
-
-    predictions = (torch.sigmoid(logits) > threshold).int()
-
-    return loss, encoded, predictions
 
 def plot_grad_flow(named_parameters):
     '''Plots the gradients flowing through different layers in the net during training.
@@ -291,18 +229,6 @@ def count_shapes(tensor_list):
             init_shapes[str(tensor.shape)] += 1
     return init_shapes
 
-
-def nvidia_info():
-    nvidia_smi.nvmlInit()
-
-    deviceCount = nvidia_smi.nvmlDeviceGetCount()
-    for i in range(deviceCount):
-        handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
-        info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
-        print("Device {}: {}, Memory : ({:.2f}% free): {}(total), {} (free), {} (used)".format(i, nvidia_smi.nvmlDeviceGetName(handle), 100*info.free/info.total, info.total, info.free, info.used))
-
-    nvidia_smi.nvmlShutdown()
-
 class WarmupTransformerLR(_LRScheduler):
     def __init__(self, optimizer, warmup_steps, target_lr, decay, last_epoch=-1, verbose=False):
         self.warmup_steps = warmup_steps
@@ -317,3 +243,68 @@ class WarmupTransformerLR(_LRScheduler):
             return [(x * self.slope) for group in self.optimizer.param_groups]
         else:
             return [(group['lr'] * self.decay) for group in self.optimizer.param_groups]
+
+
+# DEPRECATED
+# def run_finetune_batch(batch, model, classifier, class_loss, threshold, lam, device):
+#     # loss_c = None
+#     # loss_t = None
+#     # loss_f = None
+
+#     encoded = []
+#     seqs, freqs, labels, seq_augs, freq_augs = batch
+#     seqs, freqs = seqs.float().to(device), freqs.float().to(device)
+#     seq_augs, freq_augs = seq_augs.float().to(device), freq_augs.float().to(device)
+
+#     # Run through encoder model
+#     for i in range(seqs.size(1)):
+#         seq = seqs[:, i, :].unsqueeze(1)
+#         freq = freqs[:, i, :].unsqueeze(1)
+#         # seq_aug = seq_augs[:, :, i, :]
+#         # freq_aug = freq_augs[:, :, i, :]
+
+#         h_t, z_t, h_f, z_f = model(seq, freq)
+#         # h_t_aug, z_t_aug, h_f_aug, z_f_aug = model(seq_aug, freq_aug)
+
+#         # l_TF = model_loss(z_t, z_f)
+#         # l_1, l_2, l_3 = model_loss(z_t, z_f_aug), model_loss(
+#         #     z_t_aug, z_f), model_loss(z_t_aug, z_f_aug)
+
+#         # if loss_c is None:
+#         #     loss_c = (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
+#         #     loss_t = model_loss(h_t, h_t_aug)
+#         #     loss_f = model_loss(h_f, h_f_aug)
+#         # else:
+#         #     loss_c += (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
+#         #     loss_t += model_loss(h_t, h_t_aug).item()
+#         #     loss_f += model_loss(h_f, h_f_aug).item()
+
+#         fea_concat = torch.cat((z_t, z_f), dim=1)
+#         encoded.append(fea_concat)
+
+#     # Run through classifier
+#     encoded = torch.stack(encoded, dim=1)
+#     logits = classifier(encoded).squeeze(-1)  # Run trhough transformer model
+#     # predictor loss, actually, here is training loss
+#     loss = class_loss(logits, labels.to(device))
+
+#     # Final loss taking into account all portions
+#     # loss_c /= seqs.size(1)
+#     # loss_t /= seqs.size(1)
+#     # loss_f /= seqs.size(1)
+#     # loss = loss_p + (1-lam) * loss_c + lam * (loss_t + loss_f)
+
+#     predictions = (torch.sigmoid(logits) > threshold).int()
+
+#     return loss, encoded, predictions
+
+# def nvidia_info():
+#     nvidia_smi.nvmlInit()
+
+#     deviceCount = nvidia_smi.nvmlDeviceGetCount()
+#     for i in range(deviceCount):
+#         handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
+#         info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+#         print("Device {}: {}, Memory : ({:.2f}% free): {}(total), {} (free), {} (used)".format(i, nvidia_smi.nvmlDeviceGetName(handle), 100*info.free/info.total, info.total, info.free, info.used))
+
+#     nvidia_smi.nvmlShutdown()
