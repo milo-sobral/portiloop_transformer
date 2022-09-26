@@ -6,39 +6,53 @@ from random import choices, uniform, gauss
 import pathlib
 import os
 import torch
+from enum import Enum
+
+
+class EncodingTypes(Enum):
+    POSITIONAL_ENCODING = 1
+    ONE_HOT_ENCODING = 2
+
 
 EPSILON_NOISE = 0.25 # Proportion of samples which are fully random
 
 def get_default_config(name):
     DEFAULT_CONFIG['exp_name'] = name
+    if DEFAULT_CONFIG['d_model'] < 0 and DEFAULT_CONFIG['encoding_type'] == EncodingTypes.ONE_HOT_ENCODING:
+        DEFAULT_CONFIG['d_model'] = DEFAULT_CONFIG['embedding_size'] + DEFAULT_CONFIG['seq_len']
+    elif DEFAULT_CONFIG['d_model'] < 0:
+        raise AttributeError('Issue with embedding dimensions, check your config.') 
+ 
     if not check_valid_cnn(DEFAULT_CONFIG): 
-        raise ArgumentError('Sizes in CNN are not valid, try other parameters')
+        raise AttributeError('Sizes in CNN are not valid, check your config.')
     return DEFAULT_CONFIG
 
 
 DEFAULT_CONFIG = {
     # Data params
     'batch_size' : 32,
-    'seq_len': 512,
-    'window_size': 32,
+    'seq_len': 64,
+    'window_size': 64,
     'seq_stride': 1,
     'val_batch_size': 350,
     'val_dividing_factor': 20,
     'test_dividing_factor': 1,
     'batches_per_epoch': 500,
     'duplicate_as_window': True,
+    'embedding_size': 64,
 
     # Transformers Params 
-    'd_model': 32,
+    'd_model': -1,
     'n_heads': 8,
     'dim_ff': 256,
     'n_layers': 6,
     'latent_dim': 32,
     'q_dim': 32,
     'v_dim': 32,
+    'encoding_type': EncodingTypes.ONE_HOT_ENCODING,
 
     # CNN Params:
-    'use_cnn_encoder': False,
+    'use_cnn_encoder': True,
     'cnn_num_layers': 3,
     'cnn_in_channels': 1,
     'cnn_channels_multiplier': 4,
@@ -247,6 +261,9 @@ def check_valid_cnn(config):
         channels = config['cnn_channels_multiplier'] * channels
         l_out = out_dim(l_out, config['cnn_padding'], config['cnn_dilation'], config['cnn_kernel_size'], config['cnn_stride_conv'])
         l_out = out_dim(l_out, config['pool_padding'], config['pool_dilation'], config['pool_kernel_size'], config['pool_stride_conv'])
+    print(l_out)
+    print(channels)
+    
     if l_out * channels < config['min_output_size']:
         return False
     config['cnn_linear_size'] = l_out * channels

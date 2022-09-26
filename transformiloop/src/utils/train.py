@@ -13,8 +13,9 @@ from torch.nn import BCEWithLogitsLoss
 from torchinfo import summary
 from transformiloop.src.data.pretraining_data import data_generator
 from transformiloop.src.data.spindle_detect_data import get_dataloaders
-from transformiloop.src.models.model_factory import get_encoder_classifier
 from transformiloop.src.utils.configs import get_default_config
+from transformiloop.src.models.classifiers.classification_encoder_model import ClassificationModel
+
 from transformiloop.src.utils.train_utils import (finetune_epoch,
                                                   finetune_test_epoch,
                                                   pretrain_epoch, 
@@ -26,7 +27,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     time_start = time.time()
 
     config['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    config['d_model'] = config['window_size']
+    # config['d_model'] = config['window_size']
 
     dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
     pretraining_data_path = dataset_path / 'pretraining_dataset.txt'
@@ -39,22 +40,13 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     logger = WandBLogger(wandb_group, config, wandb_project, experiment_name, dataset_path)
 
     # Load models
-    classifier, encoder = get_encoder_classifier(config)
+    classifier = ClassificationModel(config)    
     print(summary(
         classifier,
         input_size=[
-            (config['batch_size'], config['seq_len'], config['d_model'])
+            (config['batch_size'], config['seq_len'], config['window_size'])
         ],
-        dtypes=[torch.float, torch.float, torch.bool],
-        depth=3,
-    ))
-    logging.debug(summary(
-        encoder,
-        input_size=[
-            (config['batch_size'], 1, config['window_size']),
-            (config['batch_size'], 1, config['window_size'])
-        ],
-        dtypes=[torch.float, torch.float, torch.bool],
+        dtypes=[torch.float, torch.float, torch.float],
         depth=3,
     ))
     classifier.to(config['device'])
@@ -67,11 +59,6 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
 
     # Initialize training objects
     config["loss_func"] = BCEWithLogitsLoss()
-
-    config["optimizer"] = optim.Adam(
-        encoder.parameters(),
-        config["lr"],
-        config["betas"])
 
     config['classifier_optimizer'] = optim.Adam(
         classifier.parameters(),
@@ -98,22 +85,22 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     early_stopping_counter = 0
 
     # Start of Pretraining loop
-    min_loss = 10000.0
-    if pretrain:
-        for epoch in range(config['epochs_pretrain']):
-            loss, loss_t, loss_f, loss_c = pretrain_epoch(encoder, config['optimizer'], pretraining_loader, config, config['device'])
-            logger.log({'loss': loss, 'loss_t': loss_t, 'loss_f': loss_f, 'loss_c':loss_c})
-            if abs(min_loss - loss) <= config['es_delta']:
-                break
-        logging.debug("Done with pretraining...")
+    # min_loss = 10000.0
+    # if pretrain:
+    #     for epoch in range(config['epochs_pretrain']):
+    #         loss, loss_t, loss_f, loss_c = pretrain_epoch(encoder, config['optimizer'], pretraining_loader, config, config['device'])
+    #         logger.log({'loss': loss, 'loss_t': loss_t, 'loss_f': loss_f, 'loss_c':loss_c})
+    #         if abs(min_loss - loss) <= config['es_delta']:
+    #             break
+    #     logging.debug("Done with pretraining...")
     
-    if not finetune_encoder:
-        for param in encoder.parameters():
-            param.requires_grad = False
+    # if not finetune_encoder:
+    #     for param in encoder.parameters():
+    #         param.requires_grad = False
 
     # Initial validation 
     val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
-            encoder, val_dl, config, classifier, config['device'])
+            val_dl, config, classifier, config['device'])
     loggable_dict = {
         "Validation Loss": val_loss,
         "Validation Accuracy": val_acc,
@@ -129,9 +116,9 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
         logging.debug(f"Starting epoch #{epoch}")
         print(f"Starting epoch #{epoch}")
         train_loss, train_acc, train_f1, train_rec, train_prec, train_cm, grads_flow = finetune_epoch(
-            encoder, config['optimizer'], train_dl, config, config['device'], classifier, config['classifier_optimizer'], config['scheduler'])
+            train_dl, config, config['device'], classifier, config['classifier_optimizer'], config['scheduler'])
         val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
-            encoder, val_dl, config, classifier, config['device'])
+            val_dl, config, classifier, config['device'])
         loggable_dict = {
             "Training Loss": train_loss,
             "Training Accuracy": train_acc,
