@@ -20,21 +20,22 @@ DEFAULT_CONFIG = {
     # Data params
     'batch_size' : 32,
     'seq_len': 512,
-    'window_size': 256,
+    'window_size': 32,
     'seq_stride': 1,
     'val_batch_size': 350,
     'val_dividing_factor': 20,
     'test_dividing_factor': 1,
     'batches_per_epoch': 500,
+    'duplicate_as_window': True,
 
     # Transformers Params 
-    'd_model': 256,
+    'd_model': 32,
     'n_heads': 8,
-    'dim_ff': 1024,
+    'dim_ff': 256,
     'n_layers': 6,
     'latent_dim': 32,
-    'q_dim': 256,
-    'v_dim': 256,
+    'q_dim': 32,
+    'v_dim': 32,
 
     # CNN Params:
     'use_cnn_encoder': False,
@@ -55,11 +56,13 @@ DEFAULT_CONFIG = {
     # Training params
     'max_duration': int(71.5 * 3600),
     'threshold': 0.5, 
-    'lr': 1e-5,
+    'lr': 7e-4,
     'betas': (0.9, 0.99),
     'clip': 5,
+    'warmup_steps': 250000,
+    'lr_decay': 0.99999,
     'log_every': 50,
-    'dropout': 0.2,
+    'dropout': 0.0,
     'epochs': 400,
     'epochs_pretrain': 30,
     'es_epochs': 100,

@@ -8,6 +8,11 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import logging
 import wandb
+import gc
+from transformiloop.src.utils.gpu_profiling import get_tensors
+import pprint
+import nvidia_smi
+from torch.optim.lr_scheduler import _LRScheduler
 
 def save_model(save_path, model, config):
     if not os.path.exists(save_path):
@@ -74,7 +79,7 @@ def pretrain_epoch(model, model_optimizer, train_loader, config, device):
 
     return total_loss, loss_t, loss_f, loss_c
 
-def finetune_epoch(model, model_optim, dataloader, config, device, classifier, classifier_optim):
+def finetune_epoch(model, model_optim, dataloader, config, device, classifier, classifier_optim, scheduler):
     model.train()
     classifier.train()
 
@@ -94,7 +99,7 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
             print(f"Training batch {batch_idx}")
 
         loss, _, predictions = simple_run_finetune_batch(
-            batch, classifier, classification_criterion, config['threshold'], config['lam'], device)
+            batch, classifier, classification_criterion, config, device)
 
         # Optimize parameters
         loss.backward()
@@ -103,9 +108,9 @@ def finetune_epoch(model, model_optim, dataloader, config, device, classifier, c
             plot_gradients = plot_grad_flow(classifier.cpu().named_parameters())
         classifier = classifier.to(device)
 
-
         model_optim.step()
         classifier_optim.step()
+        scheduler.step()
 
         with torch.no_grad():
             all_preds.append(predictions.detach().cpu())
@@ -140,7 +145,7 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
 
             # Run through model
             loss, _, predictions = simple_run_finetune_batch(
-                batch, classifier, classification_criterion, config['threshold'], config['lam'], device)
+                batch, classifier, classification_criterion, config, device)
             all_preds.append(predictions.detach().cpu())
             all_targets.append(batch[2])
             total_loss.append(loss.cpu().item())
@@ -152,13 +157,17 @@ def finetune_test_epoch(model, dataloader, config, classifier, device):
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
 
 
-def simple_run_finetune_batch(batch, classifier, loss, threshold, lam, device):
+def simple_run_finetune_batch(batch, classifier, loss, config, device):
     seqs, _, labels, _, _ = batch
+    if config['duplicate_as_window']:
+        A = torch.ones(seqs.size())
+        B = seqs[:, :, -1]
+        seqs = A * B.unsqueeze(-1)
     seqs = seqs.to(device)
     labels = labels.to(device)
     logits = classifier(seqs).squeeze(-1) 
     loss = loss(logits, labels)
-    predictions = (torch.sigmoid(logits) > threshold).int()
+    predictions = (torch.sigmoid(logits) > config['threshold']).int()
     return loss, None, predictions
 
 
@@ -293,3 +302,18 @@ def nvidia_info():
         print("Device {}: {}, Memory : ({:.2f}% free): {}(total), {} (free), {} (used)".format(i, nvidia_smi.nvmlDeviceGetName(handle), 100*info.free/info.total, info.total, info.free, info.used))
 
     nvidia_smi.nvmlShutdown()
+
+class WarmupTransformerLR(_LRScheduler):
+    def __init__(self, optimizer, warmup_steps, target_lr, decay, last_epoch=-1, verbose=False):
+        self.warmup_steps = warmup_steps
+        self.target_lr = target_lr
+        self.slope = target_lr / warmup_steps
+        self.decay = decay
+        super(WarmupTransformerLR, self).__init__(optimizer, last_epoch, verbose)
+
+    def get_lr(self):
+        x = self.last_epoch + 1
+        if x <= self.warmup_steps:
+            return [(x * self.slope) for group in self.optimizer.param_groups]
+        else:
+            return [(group['lr'] * self.decay) for group in self.optimizer.param_groups]
