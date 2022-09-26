@@ -1,3 +1,4 @@
+from argparse import ArgumentError
 import logging
 from copy import deepcopy
 from math import floor
@@ -10,6 +11,8 @@ EPSILON_NOISE = 0.25 # Proportion of samples which are fully random
 
 def get_default_config(name):
     DEFAULT_CONFIG['exp_name'] = name
+    if not check_valid_cnn(DEFAULT_CONFIG): 
+        raise ArgumentError('Sizes in CNN are not valid, try other parameters')
     return DEFAULT_CONFIG
 
 
@@ -37,8 +40,17 @@ DEFAULT_CONFIG = {
     'use_cnn_encoder': False,
     'cnn_num_layers': 3,
     'cnn_in_channels': 1,
+    'cnn_channels_multiplier': 4,
     'cnn_kernel_size': 4,
-    'cnn_stride_conv': 2
+    'cnn_stride_conv': 2,
+    'cnn_padding': 1,
+    'cnn_dilation': 1,
+    'pool_kernel_size': 4,
+    'pool_stride_conv': 2,
+    'pool_padding': 1,
+    'pool_dilation': 1, 
+    'min_output_size': 64,
+    'cnn_linear_size': -1,
 
     # Training params
     'max_duration': int(71.5 * 3600),
@@ -224,3 +236,18 @@ def sample_from_range(range_t, gaussian_mean=None, gaussian_std_factor=0.1):
     res_unrounded = clip(res_unrounded, range_t[0], range_t[1])
     return res, res_unrounded
 
+
+def check_valid_cnn(config):
+    l_out = config['window_size']
+    channels = config['cnn_in_channels']
+    for _ in range(config['cnn_num_layers']):
+        channels = config['cnn_channels_multiplier'] * channels
+        l_out = out_dim(l_out, config['cnn_padding'], config['cnn_dilation'], config['cnn_kernel_size'], config['cnn_stride_conv'])
+        l_out = out_dim(l_out, config['pool_padding'], config['pool_dilation'], config['pool_kernel_size'], config['pool_stride_conv'])
+    if l_out * channels < config['min_output_size']:
+        return False
+    config['cnn_linear_size'] = l_out * channels
+    return True
+
+def out_dim(window_size, padding, dilation, kernel, stride):
+    return floor((window_size + 2 * padding - dilation * (kernel - 1) - 1) / stride + 1)

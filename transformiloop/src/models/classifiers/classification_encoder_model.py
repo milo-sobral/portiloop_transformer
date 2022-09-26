@@ -1,3 +1,4 @@
+import math
 from torch import tensor
 import torch.nn.functional as F
 import torch
@@ -379,6 +380,37 @@ class FullAttention(nn.Module):
         return V.contiguous()
 
 
+def build_encoder_module(config):
+    # Checking if verification of CNN layers' dimensions has been previously done
+    layers = []
+    assert config['cnn_linear_size'] > 0, "Error in config, make sure to verify CNN sizes before generating model."
+
+    # Generating the CNN layers
+    in_channels = config['in_channels']
+    for _ in range(config['cnn_num_layers']):
+        out_channels = config['cnn_channels_multiplier'] * in_channels
+        layers.append(ConvPoolModule(
+            in_channels=in_channels,
+            out_channel=out_channels,
+            kernel_conv=config['cnn_kernel_size'],
+            stride_conv=config['cnn_stride_conv'],
+            conv_padding=config['cnn_padding'],
+            dilation_conv=config['cnn_dilation'],
+            kernel_pool=config['pool_kernel_size'],
+            stride_pool=config['pool_stride_conv'],
+            pool_padding=config['pool_padding'],
+            dilation_pool=config['pool_dilation'],
+            dropout_p=config['dropout']
+        ))
+        in_channels = out_channels
+    
+    # Generating Linear to project CNN output onto d_model
+    layers.append(nn.Flatten())
+    layers.append(nn.Linear(config['cnn_linear_size'], config['d_model']))
+    layers.append(F.relu())
+
+    return nn.ModuleList(layers)
+
 class ConvPoolModule(nn.Module):
     def __init__(self,
                  in_channels,
@@ -406,12 +438,7 @@ class ConvPoolModule(nn.Module):
                                  dilation=dilation_pool)
         self.dropout = nn.Dropout(dropout_p)
 
-    def forward(self, input_f):
-        x, max_value = input_f
+    def forward(self, x):
         x = F.relu(self.conv(x))
         x = self.pool(x)
-        max_temp = torch.max(abs(x))
-        if max_temp > max_value:
-            logging.debug(f"max_value = {max_temp}")
-            max_value = max_temp
-        return self.dropout(x), max_value
+        return self.dropout(x)
