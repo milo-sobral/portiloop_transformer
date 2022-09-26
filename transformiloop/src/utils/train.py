@@ -13,7 +13,7 @@ from torch.nn import BCEWithLogitsLoss
 from torchinfo import summary
 from transformiloop.src.data.pretraining_data import data_generator
 from transformiloop.src.data.spindle_detect_data import get_dataloaders
-from transformiloop.src.models.model_factory import get_encoder_classifier_TFC
+from transformiloop.src.models.model_factory import get_encoder_classifier
 from transformiloop.src.utils.configs import get_default_config
 from transformiloop.src.utils.train_utils import (finetune_epoch,
                                                   finetune_test_epoch,
@@ -38,7 +38,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     logger = WandBLogger(wandb_group, config, wandb_project, experiment_name, dataset_path)
 
     # Load models
-    classifier, encoder = get_encoder_classifier_TFC(config)
+    classifier, encoder = get_encoder_classifier(config)
     print(summary(
         classifier,
         input_size=[
@@ -47,15 +47,15 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
         dtypes=[torch.float, torch.float, torch.bool],
         depth=3,
     ))
-    # logging.debug(summary(
-    #     encoder,
-    #     input_size=[
-    #         (config['batch_size'], 1, config['window_size']),
-    #         (config['batch_size'], 1, config['window_size'])
-    #     ],
-    #     dtypes=[torch.float, torch.float, torch.bool],
-    #     depth=3,
-    # ))
+    logging.debug(summary(
+        encoder,
+        input_size=[
+            (config['batch_size'], 1, config['window_size']),
+            (config['batch_size'], 1, config['window_size'])
+        ],
+        dtypes=[torch.float, torch.float, torch.bool],
+        depth=3,
+    ))
     classifier.to(config['device'])
 
     # Load data

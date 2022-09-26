@@ -386,7 +386,7 @@ def build_encoder_module(config):
     assert config['cnn_linear_size'] > 0, "Error in config, make sure to verify CNN sizes before generating model."
 
     # Generating the CNN layers
-    in_channels = config['in_channels']
+    in_channels = config['cnn_in_channels']
     for _ in range(config['cnn_num_layers']):
         out_channels = config['cnn_channels_multiplier'] * in_channels
         layers.append(ConvPoolModule(
@@ -407,10 +407,13 @@ def build_encoder_module(config):
     # Generating Linear to project CNN output onto d_model
     layers.append(nn.Flatten())
     layers.append(nn.Linear(config['cnn_linear_size'], config['d_model']))
-    layers.append(F.relu())
+    layers.append(nn.ReLU())
+    model = nn.Sequential()
+    for l in layers:
+        model.append(l)
+    return model
 
-    return nn.ModuleList(layers)
-
+    
 class ConvPoolModule(nn.Module):
     def __init__(self,
                  in_channels,
