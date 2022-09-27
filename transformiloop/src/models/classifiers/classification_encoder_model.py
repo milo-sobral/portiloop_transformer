@@ -73,7 +73,10 @@ class ClassificationModel(nn.Module):
         # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
         self.flatten = nn.Flatten()
         self.classifier = nn.Linear(d_model * config['seq_len'], 1)
-        self.pos_encoder = PositionalEncoding(d_model, device=device, dropout=dropout)
+        if config['encoding_type'] == EncodingTypes.POSITIONAL_ENCODING: 
+            self.pos_encoder = PositionalEncoding(d_model, device=device, dropout=dropout)
+        else: 
+            self.pos_encoder = None
         
         self.encoder = build_encoder_module(config) if config['use_cnn_encoder'] else None
         self.window_size = config['window_size']

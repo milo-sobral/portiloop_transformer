@@ -25,7 +25,7 @@ DEFAULT_CONFIG = {
     'batch_size' : 32,
     'seq_len': 64,
     'window_size': 64,
-    'seq_stride': 1,
+    'seq_stride': 64,
     'val_batch_size': 350,
     'val_dividing_factor': 20,
     'test_dividing_factor': 1,
