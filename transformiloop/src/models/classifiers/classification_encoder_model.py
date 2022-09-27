@@ -401,14 +401,14 @@ class FullAttention(nn.Module):
 
 def build_encoder_module(config):
     # Checking if verification of CNN layers' dimensions has been previously done
-    layers = []
+    model = nn.Sequential()
     assert config['cnn_linear_size'] > 0, "Error in config, make sure to verify CNN sizes before generating model."
 
     # Generating the CNN layers
     in_channels = config['cnn_in_channels']
     for _ in range(config['cnn_num_layers']):
         out_channels = config['cnn_channels_multiplier'] * in_channels
-        layers.append(ConvPoolModule(
+        model.append(ConvPoolModule(
             in_channels=in_channels,
             out_channel=out_channels,
             kernel_conv=config['cnn_kernel_size'],
@@ -424,12 +424,9 @@ def build_encoder_module(config):
         in_channels = out_channels
     
     # Generating Linear to project CNN output onto d_model
-    layers.append(nn.Flatten())
-    layers.append(nn.Linear(config['cnn_linear_size'], config['embedding_size']))
-    layers.append(nn.ReLU())
-    model = nn.Sequential()
-    for l in layers:
-        model.append(l)
+    model.append(nn.Flatten())
+    model.append(nn.Linear(config['cnn_linear_size'], config['embedding_size']))
+    model.append(nn.ReLU())
     return model
 
 
