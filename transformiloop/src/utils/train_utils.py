@@ -97,6 +97,7 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
 
         # Optimize parameters
         loss.backward()
+        nn.utils.clip_grad_norm_(classifier.parameters(), config['clip'])
 
         if batch_idx == 0:
             plot_gradients = plot_grad_flow(classifier.cpu().named_parameters())
@@ -171,7 +172,7 @@ def plot_grad_flow(named_parameters):
     max_grads= []
     layers = []
     for n, p in named_parameters:
-        if(p.requires_grad) and ("bias" not in n):
+        if(p.requires_grad): # and ("bias" not in n):
             layers.append(n)
             ave_grads.append(p.grad.abs().mean())
             max_grads.append(p.grad.abs().max())

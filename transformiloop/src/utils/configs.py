@@ -66,7 +66,7 @@ DEFAULT_CONFIG = {
     'threshold': 0.5, 
     'lr': 7e-4,
     'betas': (0.9, 0.99),
-    'clip': 5,
+    'clip': 0.5,
     'warmup_steps': 250000,
     'lr_decay': 0.99999,
     'log_every': 50,
