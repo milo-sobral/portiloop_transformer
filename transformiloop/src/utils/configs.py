@@ -1,10 +1,7 @@
-from argparse import ArgumentError
 import logging
 from copy import deepcopy
 from math import floor
 from random import choices, uniform, gauss
-import pathlib
-import os
 import torch
 from enum import Enum
 
@@ -13,18 +10,13 @@ class EncodingTypes(Enum):
     POSITIONAL_ENCODING = 1
     ONE_HOT_ENCODING = 2
 
-
 EPSILON_NOISE = 0.25 # Proportion of samples which are fully random
 
+
 def get_default_config(name):
+    global DEFAULT_CONFIG
     DEFAULT_CONFIG['exp_name'] = name
-    if DEFAULT_CONFIG['d_model'] < 0 and DEFAULT_CONFIG['encoding_type'] == EncodingTypes.ONE_HOT_ENCODING:
-        DEFAULT_CONFIG['d_model'] = DEFAULT_CONFIG['embedding_size'] + DEFAULT_CONFIG['seq_len']
-    elif DEFAULT_CONFIG['d_model'] < 0:
-        raise AttributeError('Issue with embedding dimensions, check your config.') 
- 
-    if not check_valid_cnn(DEFAULT_CONFIG): 
-        raise AttributeError('Sizes in CNN are not valid, check your config.')
+    DEFAULT_CONFIG = validate_config(DEFAULT_CONFIG)
     return DEFAULT_CONFIG
 
 
@@ -50,6 +42,8 @@ DEFAULT_CONFIG = {
     'q_dim': 32,
     'v_dim': 32,
     'encoding_type': EncodingTypes.ONE_HOT_ENCODING,
+    'normalization': True,
+    'final_norm': True,
 
     # CNN Params:
     'use_cnn_encoder': True,
@@ -82,7 +76,6 @@ DEFAULT_CONFIG = {
     'es_epochs': 100,
     'lam': 0.2,
     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-    'final_norm': False,
 
     # Pretraining data 
     'max_val_num': 3000,
@@ -126,6 +119,35 @@ SAMPLEABLE_DICT = {
     'lr': [1e-6, 1e-5, 5e-6],
     'lam': [0.1, 0.7, 0.01]
 }
+
+def validate_config(config):
+    """Checks if the input config is valid.
+
+    Args:
+        config (dict): Input config
+
+    Returns:
+        Dict: The config, modified if necessary
+    """
+    # Check d_model 
+    if config['d_model'] < 0 and config['encoding_type'] == EncodingTypes.ONE_HOT_ENCODING:
+        config['d_model'] = config['embedding_size'] + config['seq_len']
+    elif config['d_model'] < 0:
+        raise AttributeError('Issue with embedding dimensions, check your config.') 
+
+    # Check CNN params and make sure CNN params are well initialized
+    if not check_valid_cnn(config): 
+        raise AttributeError('Sizes in CNN are not valid, check your config.')
+
+    # If use_cnn is True, duplicate as windows must be false
+    if config['use_cnn_encoder'] and config['duplicate_as_window']:
+        raise AttributeError('use_cnn_encoder and duplicate_as_window are mutually exclusive, check your config.')
+
+    # Check if d_model is large enough if we want to use normalization
+    if (config['normalization'] or config['final_norm']) and config['d_model'] < 16:
+        raise AttributeError('Cannot use normalization for a d_model < 16, check you config.')
+
+    return config
 
 def sample_config_dict(exp_name, prev_exp, all_exps):
     """
@@ -255,14 +277,20 @@ def sample_from_range(range_t, gaussian_mean=None, gaussian_std_factor=0.1):
 
 
 def check_valid_cnn(config):
+    """Check for the validity of the CNN parameters and updates the necessary parameters
+
+    Args:
+        config (dict): the config to check
+
+    Returns:
+        Bool: True if config is valid, false otherwise
+    """
     l_out = config['window_size']
     channels = config['cnn_in_channels']
     for _ in range(config['cnn_num_layers']):
         channels = config['cnn_channels_multiplier'] * channels
         l_out = out_dim(l_out, config['cnn_padding'], config['cnn_dilation'], config['cnn_kernel_size'], config['cnn_stride_conv'])
         l_out = out_dim(l_out, config['pool_padding'], config['pool_dilation'], config['pool_kernel_size'], config['pool_stride_conv'])
-    print(l_out)
-    print(channels)
     
     if l_out * channels < config['min_output_size']:
         return False

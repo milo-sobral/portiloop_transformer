@@ -48,14 +48,6 @@ class ClassificationModel(nn.Module):
         dropout = config['dropout']
         q_dim = config['q_dim']
         v_dim = config['v_dim']
-        final_norm = config['final_norm']
-
-        # self.transformer_extractor = TransformerExtractor(d_model=d_model,
-        #                                                   n_heads=n_heads,
-        #                                                   dim_hidden=dim_hidden,
-        #                                                   n_layers=n_layers,
-        #                                                   dropout=dropout,
-        #                                                   device=device)  
         
         self.transformer_extractor = TransformerEncoder(
             [
@@ -71,10 +63,11 @@ class ClassificationModel(nn.Module):
                     dim_ff,
                     dropout,
                     'gelu',
+                    (nn.LayerNorm(d_model) if config['normalization'] else None)
                 )
                 for _ in range(n_layers)
             ],
-            (nn.LayerNorm(d_model) if final_norm else None),
+            (nn.LayerNorm(d_model) if config['final_norm'] else None),
         )
 
         # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
