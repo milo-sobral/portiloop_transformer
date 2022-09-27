@@ -71,9 +71,9 @@ DEFAULT_CONFIG = {
     'lr_decay': 0.99999,
     'log_every': 50,
     'dropout': 0.0,
-    'epochs': 400,
+    'epochs': 4000,
     'epochs_pretrain': 30,
-    'es_epochs': 100,
+    'es_epochs': 1000,
     'lam': 0.2,
     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
 
