@@ -138,15 +138,14 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
         config['classifier_optimizer'].step()
 
         def save_best_model():
-            best_encoder = copy.deepcopy(encoder)
             best_classifier = copy.deepcopy(classifier)
 
             if save_model:
                 if save_model:
                     torch.save({
                         'epoch': epoch,
-                        'encoder_state_dict': best_encoder.state_dict(),
-                        'encoder_optimizer_state_dict': config['optimizer'].state_dict(),
+                        # 'encoder_state_dict': best_encoder.state_dict(),
+                        # 'encoder_optimizer_state_dict': config['optimizer'].state_dict(),
                         'classifier_state_dict': best_classifier.state_dict(),
                         'classifier_optimizer_state_dict': config['classifier_optimizer'].state_dict(),
                         'recall_validation': best_model_recall_validation,
