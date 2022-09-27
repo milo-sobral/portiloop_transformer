@@ -38,7 +38,7 @@ DEFAULT_CONFIG = {
     'val_dividing_factor': 20,
     'test_dividing_factor': 1,
     'batches_per_epoch': 500,
-    'duplicate_as_window': True,
+    'duplicate_as_window': False,
     'embedding_size': 64,
 
     # Transformers Params 

@@ -22,4 +22,4 @@ print(config)
 #     depth=3,
 # )
 
-run(config, 'experiment_cnn_good_model', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
+run(config, 'experiment_cnn_good_model_real', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
