@@ -97,7 +97,13 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     # if not finetune_encoder:
     #     for param in encoder.parameters():
     #         param.requires_grad = False
+    for batch in val_dl:
+        pass
 
+    for batch in train_dl:
+        pass
+
+    return
     # Initial validation 
     val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
             val_dl, config, classifier, config['device'])

@@ -32,6 +32,7 @@ DEFAULT_CONFIG = {
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
     'embedding_size': 64,
+    'label_history': True,
 
     # Transformers Params 
     'd_model': -1,
