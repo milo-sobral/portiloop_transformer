@@ -22,12 +22,12 @@ def get_default_config(name):
 
 DEFAULT_CONFIG = {
     # Data params
-    'batch_size' : 32,
+    'batch_size' : 64,
     'seq_len': 64,
     'window_size': 64,
     'seq_stride': 64,
-    'val_batch_size': 350,
-    'val_dividing_factor': 20,
+    'val_batch_size': 1000,
+    'val_dividing_factor': 10,
     'test_dividing_factor': 1,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
