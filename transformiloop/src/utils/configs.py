@@ -22,7 +22,7 @@ def get_default_config(name):
 
 DEFAULT_CONFIG = {
     # Data params
-    'batch_size' : 64,
+    'batch_size' : 32,
     'seq_len': 64,
     'window_size': 64,
     'seq_stride': 64,
@@ -31,7 +31,7 @@ DEFAULT_CONFIG = {
     'test_dividing_factor': 1,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
-    'embedding_size': 64,
+    'embedding_size': 128,
 
     # Transformers Params 
     'd_model': -1,
@@ -51,11 +51,11 @@ DEFAULT_CONFIG = {
     'cnn_in_channels': 1,
     'cnn_channels_multiplier': 4,
     'cnn_kernel_size': 4,
-    'cnn_stride_conv': 2,
+    'cnn_stride_conv': 1,
     'cnn_padding': 1,
     'cnn_dilation': 1,
     'pool_kernel_size': 4,
-    'pool_stride_conv': 2,
+    'pool_stride_conv': 1,
     'pool_padding': 1,
     'pool_dilation': 1, 
     'min_output_size': 64,
