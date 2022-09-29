@@ -108,7 +108,10 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
 
         with torch.no_grad():
             all_preds.append(predictions.detach().cpu())
-            all_targets.append(batch[2])
+            if config['full_transformer']:
+                all_targets.append(batch[2][:, -1].squeeze(-1).detach())
+            else:
+                all_targets.append(batch[2].detach())
             total_loss.append(loss.cpu().item())
     
     with torch.no_grad():
@@ -138,7 +141,10 @@ def finetune_test_epoch(dataloader, config, classifier, device):
             loss, _, predictions = simple_run_finetune_batch(
                 batch, classifier, classification_criterion, config, device)
             all_preds.append(predictions.detach().cpu())
-            all_targets.append(batch[2])
+            if config['full_transformer']:
+                all_targets.append(batch[2][:, -1].squeeze(-1).detach())
+            else:
+                all_targets.append(batch[2].detach())
             total_loss.append(loss.cpu().item())
 
         acc, f1, recall, precision, cm = compute_metrics(torch.stack(
@@ -159,7 +165,8 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device):
     labels = labels.to(device)
 
     if config['full_transformer']:
-        history, labels = labels.split(labels.size(-1)-1, dim=-1)
+        history, labels = labels.squeeze(-1).split(labels.size(1)-1, dim=-1)
+        labels = labels.squeeze(-1)
         logits = classifier(seqs, history).squeeze(-1)
     else:
         logits = classifier(seqs, None).squeeze(-1)
@@ -203,6 +210,9 @@ def plot_grad_flow(named_parameters):
 def compute_metrics(predictions, targets):
     predictions = predictions.type(torch.int)
     targets = targets.type(torch.int)
+
+    print(targets.shape)
+    print(predictions.shape)
 
     tp = (targets * predictions)
     tn = ((1 - targets) * (1 - predictions))

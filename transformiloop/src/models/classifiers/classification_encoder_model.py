@@ -100,7 +100,12 @@ class ClassificationModel(nn.Module):
 
         # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
         self.flatten = nn.Flatten()
-        self.classifier = nn.Linear(d_model * config['seq_len'], 1)
+        self.full_transformer = config['full_transformer']
+        if self.full_transformer:
+            self.classifier = nn.Linear(d_model * (config['seq_len']-1), 1)
+        else:
+            self.classifier = nn.Linear(d_model * (config['seq_len']), 1)
+
         if config['encoding_type'] == EncodingTypes.POSITIONAL_ENCODING: 
             self.pos_encoder = PositionalEncoding(d_model, device=device, dropout=dropout)
         else: 
@@ -112,7 +117,6 @@ class ClassificationModel(nn.Module):
         self.encoding_type = config['encoding_type'] 
         self.one_hot_tensor_train = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['batch_size'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
         self.one_hot_tensor_val = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['val_batch_size'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
-        self.full_transformer = config['full_transformer']
 
     def forward(self, x: tensor, history:tensor):
         """_summary_
@@ -137,7 +141,7 @@ class ClassificationModel(nn.Module):
         x = self.encode(x)
 
         # Go through feature extractor
-        x = self.transformer_extractor(x)
+        x = self.transformer_encoder(x)
 
         # Go through transformer decoder with history as x and memory as input
         if self.full_transformer:
@@ -159,9 +163,9 @@ class ClassificationModel(nn.Module):
             x = rearrange(x, 's b e -> b s e')
         elif self.encoding_type == EncodingTypes.ONE_HOT_ENCODING:
             if x.size(0) == self.one_hot_tensor_train.size(0):
-                x = torch.cat((x, self.one_hot_tensor_train), -1)
+                x = torch.cat((x, self.one_hot_tensor_train[:, :x.size(1), :]), -1)
             elif x.size(0) == self.one_hot_tensor_val.size(0):
-                x = torch.cat((x, self.one_hot_tensor_val), -1)
+                x = torch.cat((x, self.one_hot_tensor_val[:, :x.size(1), :]), -1)
             else:
                 raise ValueError("Missing batch size in one hot encoding.")
         return x
@@ -297,8 +301,8 @@ class TransformerEncoderLayer(nn.Module):
         self.attention = attention
         self.linear1 = nn.Linear(d_model, d_ff)
         self.linear2 = nn.Linear(d_ff, d_model)
-        self.norm1 = copy.deepcopy(norm_layer)
-        self.norm2 = copy.deepcopy(norm_layer)
+        self.norm1 = deepcopy(norm_layer)
+        self.norm2 = deepcopy(norm_layer)
         self.dropout = nn.Dropout(dropout)
         self.activation = F.relu if activation == "relu" else F.gelu
 
@@ -377,9 +381,9 @@ class TransformerDecoderLayer(nn.Module):
         self.cross_attention = cross_attention
         self.linear1 = nn.Linear(d_model, d_ff)
         self.linear2 = nn.Linear(d_ff, d_model)
-        self.norm1 = copy.deepcopy(normalization)
-        self.norm2 = copy.deepcopy(normalization)
-        self.norm3 = copy.deepcopy(normalization)
+        self.norm1 = deepcopy(normalization)
+        self.norm2 = deepcopy(normalization)
+        self.norm3 = deepcopy(normalization)
         self.dropout = nn.Dropout(dropout)
         self.activation = F.relu if activation == "relu" else F.gelu
 
