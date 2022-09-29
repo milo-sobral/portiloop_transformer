@@ -157,10 +157,16 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device):
 
     seqs = seqs.to(device)
     labels = labels.to(device)
-    logits = classifier(seqs).squeeze(-1) 
+
+    if config['full_transformer']:
+        history, labels = labels.split(labels.size(-1)-1, dim=-1)
+        logits = classifier(seqs, history).squeeze(-1)
+    else:
+        logits = classifier(seqs, None).squeeze(-1)
     loss = loss(logits, labels)
     predictions = (torch.sigmoid(logits) > config['threshold']).int()
     return loss, None, predictions
+
 
 def plot_grad_flow(named_parameters):
     '''Plots the gradients flowing through different layers in the net during training.

@@ -55,7 +55,7 @@ class FinetuneDataset(Dataset):
         self.seq_stride = config['seq_stride']
         self.past_signal_len = self.seq_len * self.seq_stride
         self.threshold = config['threshold']
-        self.label_history = config['label_history']
+        self.label_history = config['full_transformer']
 
         # list of indices that can be sampled:
         if self.label_history:
