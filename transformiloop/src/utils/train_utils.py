@@ -211,9 +211,6 @@ def compute_metrics(predictions, targets):
     predictions = predictions.type(torch.int)
     targets = targets.type(torch.int)
 
-    print(targets.shape)
-    print(predictions.shape)
-
     tp = (targets * predictions)
     tn = ((1 - targets) * (1 - predictions))
     fp = ((1 - targets) * predictions)
