@@ -44,7 +44,8 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     print(summary(
         classifier,
         input_size=[
-            (config['batch_size'], config['seq_len'], config['window_size'])
+            (config['batch_size'], config['seq_len'], config['window_size']),
+            (config['batch_size'], config['seq_len']-1)
         ],
         dtypes=[torch.float, torch.float, torch.float],
         depth=3,

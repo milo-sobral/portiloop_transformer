@@ -14,7 +14,7 @@ from transformiloop.src.models.embedding_models import PositionalEncoding
 from transformiloop.src.models.masking import FullMask, LengthMask
 from einops import rearrange
 from math import sqrt
-from copy import deepcopy
+from copy import copy, deepcopy
 
 from transformiloop.src.utils.configs import EncodingTypes
 
@@ -49,7 +49,7 @@ class ClassificationModel(nn.Module):
         q_dim = config['q_dim']
         v_dim = config['v_dim']
         
-        self.transformer_extractor = TransformerEncoder(
+        self.transformer_encoder = TransformerEncoder(
             [
                 TransformerEncoderLayer(
                     AttentionLayer(
@@ -70,22 +70,55 @@ class ClassificationModel(nn.Module):
             (nn.LayerNorm(d_model) if config['final_norm'] else None),
         )
 
+        self.transformer_decoder = TransformerDecoder(
+            [
+                TransformerDecoderLayer(
+                    AttentionLayer(
+                        FullAttention(),
+                        d_model,
+                        n_heads,
+                        d_keys=q_dim,
+                        d_values=v_dim,
+                    ),
+                    AttentionLayer(
+                        FullAttention(),
+                        d_model,
+                        n_heads,
+                        d_keys=q_dim,
+                        d_values=v_dim,
+                    ),
+                    d_model,
+                    dim_ff,
+                    dropout,
+                    'gelu',
+                    (nn.LayerNorm(d_model) if config['normalization'] else None)
+                )
+                for _ in range(n_layers)
+            ],
+            (nn.LayerNorm(d_model) if config['final_norm'] else None),
+        )
+
         # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
         self.flatten = nn.Flatten()
-        self.classifier = nn.Linear(d_model * config['seq_len'], 1)
+        self.full_transformer = config['full_transformer']
+        if self.full_transformer:
+            self.classifier = nn.Linear(d_model * (config['seq_len']-1), 1)
+        else:
+            self.classifier = nn.Linear(d_model * (config['seq_len']), 1)
+
         if config['encoding_type'] == EncodingTypes.POSITIONAL_ENCODING: 
             self.pos_encoder = PositionalEncoding(d_model, device=device, dropout=dropout)
         else: 
             self.pos_encoder = None
         
+        self.embedding_size = config['embedding_size']
         self.encoder = build_encoder_module(config) if config['use_cnn_encoder'] else None
         self.window_size = config['window_size']
         self.encoding_type = config['encoding_type'] 
         self.one_hot_tensor_train = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['batch_size'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
         self.one_hot_tensor_val = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['val_batch_size'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
-        
 
-    def forward(self, x: tensor):
+    def forward(self, x: tensor, history:tensor):
         """_summary_
 
         Args:
@@ -105,26 +138,36 @@ class ClassificationModel(nn.Module):
             x = x.view(b, s, -1)
 
         # Positional encoding
-        if self.encoding_type == EncodingTypes.POSITIONAL_ENCODING:
-            x = rearrange(x, 'b s e -> s b e')
-            x = self.pos_encoder(x)
-            x = rearrange(x, 's b e -> b s e')
-        elif self.encoding_type == EncodingTypes.ONE_HOT_ENCODING:
-            if x.size(0) == self.one_hot_tensor_train.size(0):
-                x = torch.cat((x, self.one_hot_tensor_train), -1)
-            elif x.size(0) == self.one_hot_tensor_val.size(0):
-                x = torch.cat((x, self.one_hot_tensor_val), -1)
-            else:
-                raise ValueError("Missing batch size in one hot encoding.")
+        x = self.encode(x)
 
         # Go through feature extractor
-        x = self.transformer_extractor(x)
+        x = self.transformer_encoder(x)
+
+        # Go through transformer decoder with history as x and memory as input
+        if self.full_transformer:
+            history = history.unsqueeze(-1).expand(history.size(0), history.size(1), self.embedding_size)
+            history = self.encode(history)
+            x = self.transformer_decoder(history, x)
 
         # Get latent vector
         x = self.flatten(x)
     
         # # Generate output signal from latent vector
         x = self.classifier(x)
+        return x
+    
+    def encode(self, x):
+        if self.encoding_type == EncodingTypes.POSITIONAL_ENCODING:
+            x = rearrange(x, 'b s e -> s b e')
+            x = self.pos_encoder(x)
+            x = rearrange(x, 's b e -> b s e')
+        elif self.encoding_type == EncodingTypes.ONE_HOT_ENCODING:
+            if x.size(0) == self.one_hot_tensor_train.size(0):
+                x = torch.cat((x, self.one_hot_tensor_train[:, :x.size(1), :]), -1)
+            elif x.size(0) == self.one_hot_tensor_val.size(0):
+                x = torch.cat((x, self.one_hot_tensor_val[:, :x.size(1), :]), -1)
+            else:
+                raise ValueError("Missing batch size in one hot encoding.")
         return x
 
 class TransformerEncoder(nn.Module):
@@ -182,6 +225,54 @@ class TransformerEncoder(nn.Module):
         return x
 
 
+class TransformerDecoder(nn.Module):
+    """TransformerDecoder is little more than a sequence of transformer decoder
+    layers.
+
+    It contains an optional final normalization layer as well as the ability to
+    create the masks once and save some computation.
+
+    Arguments
+    ----------
+        layers: list, TransformerDecoderLayer instances or instances that
+                implement the same interface
+        norm_layer: A normalization layer to be applied to the final output
+                    (default: None which means no normalization)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
+    """
+    def __init__(self, layers, norm_layer=None, event_dispatcher=""):
+        super(TransformerDecoder, self).__init__()
+        self.layers = nn.ModuleList(layers)
+        self.norm = norm_layer
+
+    def forward(self, x, memory, x_mask=None, x_length_mask=None,
+                memory_mask=None, memory_length_mask=None):
+        # Normalize the masks
+        N = x.shape[0]
+        L = x.shape[1]
+        L_prime = memory.shape[1]
+        x_mask = x_mask or FullMask(L, device=x.device)
+        x_length_mask = x_length_mask  or \
+            LengthMask(x.new_full((N,), L, dtype=torch.int64))
+        memory_mask = memory_mask or FullMask(L, L_prime, device=x.device)
+        memory_length_mask = memory_length_mask or \
+            LengthMask(x.new_full((N,), L_prime, dtype=torch.int64))
+
+        # Apply all the transformer decoders
+        for layer in self.layers:
+            x = layer(x, memory, x_mask=x_mask, x_length_mask=x_length_mask,
+                      memory_mask=memory_mask,
+                      memory_length_mask=memory_length_mask)
+
+        # Apply the normalization if needed
+        if self.norm is not None:
+            x = self.norm(x)
+
+        return x
+
+
 class TransformerEncoderLayer(nn.Module):
     """Self attention and feed forward network with skip connections.
     
@@ -210,8 +301,8 @@ class TransformerEncoderLayer(nn.Module):
         self.attention = attention
         self.linear1 = nn.Linear(d_model, d_ff)
         self.linear2 = nn.Linear(d_ff, d_model)
-        self.norm1 = norm_layer
-        self.norm2 = norm_layer
+        self.norm1 = deepcopy(norm_layer)
+        self.norm2 = deepcopy(norm_layer)
         self.dropout = nn.Dropout(dropout)
         self.activation = F.relu if activation == "relu" else F.gelu
 
@@ -254,6 +345,115 @@ class TransformerEncoderLayer(nn.Module):
             res = self.norm2(x+y)
         else:
             res = x+y
+
+        return res
+
+
+class TransformerDecoderLayer(nn.Module):
+    """The decoder layer from "Attention Is All You Need".
+
+    Similar to the encoder layer, this layer implements the decoder that
+    PyTorch implements but can be used with any attention implementation
+    because it receives the attention layers as constructor arguments.
+
+    Arguments
+    ---------
+        self_attention: The attention implementation to use for self attention
+                        given as a nn.Module
+        cross_attention: The attention implementation to use for cross
+                         attention given as a nn.Module
+        d_model: The input feature dimensionality
+        d_ff: The dimensionality of the intermediate features after the
+              attention (default: d_model*4)
+        dropout: The dropout rate to apply to the intermediate features
+                 (default: 0.1)
+        activation: {'relu', 'gelu'} Which activation to use for the feed
+                    forward part of the layer (default: relu)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
+    """
+    def __init__(self, self_attention, cross_attention, d_model, d_ff=None,
+                 dropout=0.1, activation="relu", normalization=None):
+        super(TransformerDecoderLayer, self).__init__()
+        d_ff = d_ff or 4*d_model
+        self.self_attention = self_attention
+        self.cross_attention = cross_attention
+        self.linear1 = nn.Linear(d_model, d_ff)
+        self.linear2 = nn.Linear(d_ff, d_model)
+        self.norm1 = deepcopy(normalization)
+        self.norm2 = deepcopy(normalization)
+        self.norm3 = deepcopy(normalization)
+        self.dropout = nn.Dropout(dropout)
+        self.activation = F.relu if activation == "relu" else F.gelu
+
+    def forward(self, x, memory, x_mask=None, x_length_mask=None,
+                memory_mask=None, memory_length_mask=None):
+        """Apply the transformer decoder to the input x using the memory
+        `memory`.
+
+        Arguments
+        ---------
+            x: The input features of shape (N, L, E) where N is the batch size,
+               L is the sequence length (padded) and E should be the same as
+               the d_model passed in the constructor.
+            memory: The memory features of shape (N, L', E) where N is the
+                    batch size, L' is the memory's sequence length (padded) and
+                    E should be the same as the d_model.
+            x_mask: An implementation of fast_transformers.masking.BaseMask
+                    that encodes where each element of x can attend to in x.
+                    Namely the self attention mask.
+            x_length_mask: An implementation of a BaseMask that encodes how
+                           many elements each sequence in the batch consists
+                           of.
+            memory_mask: An implementation of BaseMask that encodes where each
+                         element of x can attend to in the memory. Namely the
+                         cross attention mask.
+            memory_length_mask: An implementation of a BaseMask that encodes how
+                                many elements each memory sequence in the batch
+                                consists of.
+        """
+        # Normalize the masks
+        N = x.shape[0]
+        L = x.shape[1]
+        L_prime = memory.shape[1]
+        x_mask = x_mask or FullMask(L, device=x.device)
+        x_length_mask = x_length_mask  or \
+            LengthMask(x.new_full((N,), L, dtype=torch.int64))
+        memory_mask = memory_mask or FullMask(L, L_prime, device=x.device)
+        memory_length_mask = memory_length_mask or \
+            LengthMask(x.new_full((N,), L_prime, dtype=torch.int64))
+
+        # First apply the self attention and add it to the input
+        x = x + self.dropout(self.self_attention(
+            x, x, x,
+            attn_mask=x_mask,
+            query_lengths=x_length_mask,
+            key_lengths=x_length_mask
+        ))
+        if self.norm1 is not None:
+            x = self.norm1(x)
+
+        # Secondly apply the cross attention and add it to the previous output
+        x = x + self.dropout(self.cross_attention(
+            x, memory, memory,
+            attn_mask=memory_mask,
+            query_lengths=x_length_mask,
+            key_lengths=memory_length_mask
+        ))
+
+        # Finally run the fully connected part of the layer
+        if self.norm2 is not None:
+            y = x = self.norm2(x)
+        else:
+            y = x
+        y = self.dropout(self.activation(self.linear1(y)))
+        y = self.dropout(self.linear2(y))
+        
+        if self.norm3 is not None:
+            res = self.norm3(x+y)
+        else:
+            res = x + y
 
         return res
 

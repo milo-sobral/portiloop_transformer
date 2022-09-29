@@ -31,7 +31,8 @@ DEFAULT_CONFIG = {
     'test_dividing_factor': 1,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
-    'embedding_size': 128,
+    'embedding_size': 64,
+    'full_transformer': True,
 
     # Transformers Params 
     'd_model': -1,

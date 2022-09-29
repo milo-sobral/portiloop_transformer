@@ -50,15 +50,25 @@ class FinetuneDataset(Dataset):
 
         assert self.window_size <= len(self.data[0]), "Dataset smaller than window size."
         self.full_signal = torch.tensor(self.data[0], dtype=torch.float)
+        self.full_labels = torch.tensor(self.data[3], dtype=torch.float)
         self.seq_len = config['seq_len']  # 1 means single sample / no sequence ?
         self.seq_stride = config['seq_stride']
         self.past_signal_len = self.seq_len * self.seq_stride
         self.threshold = config['threshold']
+        self.label_history = config['full_transformer']
 
         # list of indices that can be sampled:
-        self.indices = [idx for idx in range(len(self.data[0]) - self.window_size)  # all possible idxs in the dataset
-                        if not (self.data[3][idx + self.window_size - 1] < 0  # that are not ending in an unlabeled zone
-                                or idx < self.past_signal_len)]  # and far enough from the beginning to build a sequence up to here
+        if self.label_history:
+            self.indices = [idx for idx in range(len(self.data[0]) - self.window_size)  # all possible idxs in the dataset
+                            if not (self.data[3][idx + self.window_size - 1] < 0  # that are not ending in an unlabeled zone
+                                    or self.data[3][idx - (self.past_signal_len - self.seq_stride) + self.window_size - 1] < 0  # and not beginning in an unlabeled zone
+                                    or idx < self.past_signal_len)]  # and far enough from the beginning to build a sequence up to here
+        else:
+            self.indices = [idx for idx in range(len(self.data[0]) - self.window_size)
+                            # all possible idxs in the dataset
+                            if not (
+                            self.data[3][idx + self.window_size - 1] < 0  # that are not ending in an unlabeled zone
+                            or idx < self.past_signal_len)]  # and far enough from the beginning to build a sequence up to here
         total_spindles = np.sum(self.data[3] > self.threshold)
         print(f"total number of spindles in this dataset : {total_spindles}")
 
@@ -71,8 +81,12 @@ class FinetuneDataset(Dataset):
         assert self.data[3][idx + self.window_size - 1] >= 0, f"Bad index: {idx}."
 
         x_data = self.full_signal[idx - (self.past_signal_len - self.seq_stride):idx + self.window_size].unfold(0, self.window_size, self.seq_stride)
-        label = torch.tensor(self.data[3][idx + self.window_size - 1], dtype=torch.float)
-        x_data_f = fft.fft(x_data).abs() 
+        label_ = torch.tensor(self.data[3][idx + self.window_size - 1], dtype=torch.float)
+        label = self.full_labels[idx - (self.past_signal_len - self.seq_stride) + self.window_size - 1:idx + self.window_size].unfold(0, 1, self.seq_stride)
+        assert len(label) == len(x_data), f"len(label):{len(label)} != len(x_data):{len(x_data)}"
+        assert -1 not in label, f"invalid label: {label}"
+        assert label_ == label[-1], f"bad label: {label_} != {label[-1]}"
+        x_data_f = fft.fft(x_data).abs()
 
         aug1, aug1_f = torch.zeros(x_data.shape), torch.zeros(x_data_f.shape)
         if self.augmentation_config is not None:
