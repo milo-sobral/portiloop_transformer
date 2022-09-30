@@ -22,4 +22,4 @@ print(config)
 #     depth=3,
 # )
 
-run(config, 'experiment_full_transformer', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
+run(config, 'experiment_full_transformer2', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
