@@ -116,7 +116,8 @@ class ClassificationModel(nn.Module):
         self.window_size = config['window_size']
         self.encoding_type = config['encoding_type'] 
         self.one_hot_tensor_train = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['batch_size'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
-        self.one_hot_tensor_val = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['val_batch_size'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
+        self.one_hot_tensor_val = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['batch_size_validation'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
+        self.one_hot_tensor_test = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['batch_size_test'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
 
     def forward(self, x: tensor, history:tensor):
         """_summary_
@@ -133,7 +134,7 @@ class ClassificationModel(nn.Module):
         if self.encoder is not None:
             b = x.size(0)
             s = x.size(1)
-            x = x.view(-1, self.window_size).unsqueeze(1)
+            x = x.contiguous().view(-1, self.window_size).unsqueeze(1)
             x = self.encoder(x)
             x = x.view(b, s, -1)
 
@@ -166,6 +167,8 @@ class ClassificationModel(nn.Module):
                 x = torch.cat((x, self.one_hot_tensor_train[:, :x.size(1), :]), -1)
             elif x.size(0) == self.one_hot_tensor_val.size(0):
                 x = torch.cat((x, self.one_hot_tensor_val[:, :x.size(1), :]), -1)
+            elif x.size(0) == self.one_hot_tensor_test.size(0):
+                x = torch.cat((x, self.one_hot_tensor_test[:, :x.size(1), :]), -1)
             else:
                 raise ValueError("Missing batch size in one hot encoding.")
         return x

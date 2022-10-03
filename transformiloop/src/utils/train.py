@@ -39,8 +39,13 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     logging.debug(f"Config: {config}")
     logger = WandBLogger(wandb_group, config, wandb_project, experiment_name, dataset_path)
 
+    # Load data
+    train_dl, val_dl, _ = get_dataloaders(config, dataset_path)
+    logging.debug(pprint.pprint(config))
+    # pretraining_loader = data_generator(pretraining_data_path, config)
+
     # Load models
-    classifier = ClassificationModel(config)    
+    classifier = ClassificationModel(config)
     print(summary(
         classifier,
         input_size=[
@@ -51,12 +56,6 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
         depth=3,
     ))
     classifier.to(config['device'])
-
-    # Load data
-    train_dl, val_dl, _ = get_dataloaders(config, dataset_path)
-    print(len(val_dl))
-    logging.debug(pprint.pprint(config))
-    # pretraining_loader = data_generator(pretraining_data_path, config)
 
     # Initialize training objects
     config["loss_func"] = BCEWithLogitsLoss()
@@ -121,6 +120,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
         val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
             val_dl, config, classifier, config['device'])
         loggable_dict = {
+            "Learning Rate": float(config['classifier_optimizer'].param_groups[0]['lr']),
             "Training Loss": train_loss,
             "Training Accuracy": train_acc,
             "Training F1": train_f1,

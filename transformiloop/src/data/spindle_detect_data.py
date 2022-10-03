@@ -36,7 +36,7 @@ def get_subject_list(config, dataset_path):
     return train_subject, validation_subject, test_subject
 
 class FinetuneDataset(Dataset):
-    def __init__(self, list_subject, config, dataset_path, augmentation_config=None, device=None):
+    def __init__(self, list_subject, config, dataset_path, training, augmentation_config=None, device=None):
         self.fe = config['fe']
         self.device = device
         self.window_size = config['window_size']
@@ -51,11 +51,11 @@ class FinetuneDataset(Dataset):
         assert self.window_size <= len(self.data[0]), "Dataset smaller than window size."
         self.full_signal = torch.tensor(self.data[0], dtype=torch.float)
         self.full_labels = torch.tensor(self.data[3], dtype=torch.float)
-        self.seq_len = config['seq_len']  # 1 means single sample / no sequence ?
+        self.seq_len = config['seq_len']  if training else 1  # 1 means single sample / no sequence ?
         self.seq_stride = config['seq_stride']
         self.past_signal_len = self.seq_len * self.seq_stride
         self.threshold = config['threshold']
-        self.label_history = config['full_transformer']
+        self.label_history = training
 
         # list of indices that can be sampled:
         if self.label_history:
@@ -66,8 +66,7 @@ class FinetuneDataset(Dataset):
         else:
             self.indices = [idx for idx in range(len(self.data[0]) - self.window_size)
                             # all possible idxs in the dataset
-                            if not (
-                            self.data[3][idx + self.window_size - 1] < 0  # that are not ending in an unlabeled zone
+                            if not (self.data[3][idx + self.window_size - 1] < 0  # that are not ending in an unlabeled zone
                             or idx < self.past_signal_len)]  # and far enough from the beginning to build a sequence up to here
         total_spindles = np.sum(self.data[3] > self.threshold)
         print(f"total number of spindles in this dataset : {total_spindles}")
@@ -81,11 +80,12 @@ class FinetuneDataset(Dataset):
         assert self.data[3][idx + self.window_size - 1] >= 0, f"Bad index: {idx}."
 
         x_data = self.full_signal[idx - (self.past_signal_len - self.seq_stride):idx + self.window_size].unfold(0, self.window_size, self.seq_stride)
-        label_ = torch.tensor(self.data[3][idx + self.window_size - 1], dtype=torch.float)
-        label = self.full_labels[idx - (self.past_signal_len - self.seq_stride) + self.window_size - 1:idx + self.window_size].unfold(0, 1, self.seq_stride)
-        assert len(label) == len(x_data), f"len(label):{len(label)} != len(x_data):{len(x_data)}"
-        assert -1 not in label, f"invalid label: {label}"
-        assert label_ == label[-1], f"bad label: {label_} != {label[-1]}"
+        label_unique = torch.tensor(self.data[3][idx + self.window_size - 1], dtype=torch.float)
+        if self.label_history:
+            label_history = self.full_labels[idx - (self.past_signal_len - self.seq_stride) + self.window_size - 1:idx + self.window_size].unfold(0, 1, self.seq_stride)
+            assert len(label_history) == len(x_data), f"len(label):{len(label_history)} != len(x_data):{len(x_data)}"
+            assert -1 not in label_history, f"invalid label: {label_history}"
+            assert label_unique == label_history[-1], f"bad label: {label_unique} != {label_history[-1]}"
         x_data_f = fft.fft(x_data).abs()
 
         aug1, aug1_f = torch.zeros(x_data.shape), torch.zeros(x_data_f.shape)
@@ -93,6 +93,7 @@ class FinetuneDataset(Dataset):
             aug1 = DataTransform_TD(x_data.unsqueeze(0), self.augmentation_config).squeeze(1)
             aug1_f = DataTransform_FD(x_data_f.unsqueeze(0), self.device).squeeze(1)
 
+        label = label_history if self.label_history else label_unique
         return x_data, x_data_f, label, aug1, aug1_f
 
     def is_spindle(self, idx):
@@ -167,31 +168,79 @@ class RandomSampler(Sampler):
     def __len__(self):
         return self.length
 
+# class ValidationSampler(Sampler):
+#     def __init__(self, data_source, dividing_factor):
+#         self.len_max = len(data_source)
+#         self.data = data_source
+#         self.dividing_factor = dividing_factor
+#
+#     def __iter__(self):
+#         for idx in range(0, self.len_max, self.dividing_factor):
+#             yield idx
+#
+#     def __len__(self):
+#         return self.len_max // self.dividing_factor
+
+
 class ValidationSampler(Sampler):
-    def __init__(self, data_source, dividing_factor):
-        self.len_max = len(data_source)
-        self.data = data_source
-        self.dividing_factor = dividing_factor
+    """
+    network_stride (int >= 1, default: 1): divides the size of the dataset (and of the batch) by striding further than 1
+    """
+
+    def __init__(self, seq_stride, nb_segment, network_stride):
+        network_stride = int(network_stride)
+        assert network_stride >= 1
+        self.network_stride = network_stride
+        self.seq_stride = seq_stride
+        self.nb_segment = nb_segment
+        self.len_segment = 115 * 250  # 115 seconds x 250 Hz
 
     def __iter__(self):
-        for idx in range(0, self.len_max, self.dividing_factor):
-            yield idx
+        # seed()
+        batches_per_segment = self.len_segment // self.seq_stride  # len sequence = 115 s + add the 15 first s?
+        cursor_segment = 0
+        while cursor_segment < batches_per_segment:
+            for i in range(self.nb_segment):
+                for j in range(0, (self.seq_stride // self.network_stride) * self.network_stride, self.network_stride):
+                    cur_idx = i * self.len_segment + j + cursor_segment * self.seq_stride
+                    # print(f"i:{i}, j:{j}, self.len_segment:{self.len_segment}, cursor_batch:{cursor_batch}, self.seq_stride:{self.seq_stride}, cur_idx:{cur_idx}")
+                    yield cur_idx
+            cursor_segment += 1
 
     def __len__(self):
-        return self.len_max // self.dividing_factor
+        assert False
+        # return len(self.data)
+        # return len(self.data_source)
+
+
+def get_info_subject(subjects, config):
+    nb_segment = len(np.hstack([range(int(s[1]), int(s[2])) for s in subjects]))
+    batch_size = len(list(range(0, (config['seq_stride'] // config['network_stride']) * config['network_stride'], config['network_stride']))) * nb_segment
+    return nb_segment, batch_size
 
 
 def get_dataloaders(config, dataset_path):
     subs_train, subs_val, subs_test = get_subject_list(config, dataset_path)
-    train_ds = FinetuneDataset(subs_train, config, dataset_path, augmentation_config=None, device=config['device'])
-    val_ds = FinetuneDataset(subs_val, config, dataset_path, augmentation_config=None, device=config['device'])
-    test_ds = FinetuneDataset(subs_test, config, dataset_path, augmentation_config=None, device=config['device'])
+
+    train_ds = FinetuneDataset(subs_train, config, dataset_path, config['full_transformer'], augmentation_config=None, device=config['device'])
+    val_ds = FinetuneDataset(subs_val, config, dataset_path, False, augmentation_config=None, device=config['device'])
+    test_ds = FinetuneDataset(subs_test, config, dataset_path, False, augmentation_config=None, device=config['device'])
 
     idx_true, idx_false = get_class_idxs(train_ds, 0)
 
     train_sampler = RandomSampler(idx_true, idx_false, config)
-    val_sampler = ValidationSampler(val_ds, config['val_dividing_factor'])
-    test_sampler = ValidationSampler(test_ds, config['test_dividing_factor'])
+
+    nb_segment_val, batch_size_val = get_info_subject(subs_val, config)
+    nb_segment_test, batch_size_test = get_info_subject(subs_test, config)
+    config['batch_size_validation'] = batch_size_val
+    config['batch_size_test'] = batch_size_test
+
+    print(f"Batch Size validation: {batch_size_val}")
+    print(f"Batch Size test: {batch_size_test}")
+    # val_sampler = ValidationSampler(val_ds, config['val_dividing_factor'])
+    # test_sampler = ValidationSampler(test_ds, config['test_dividing_factor'])
+    val_sampler = ValidationSampler(config['seq_stride'], nb_segment_val, config['network_stride'])
+    test_sampler = ValidationSampler(config['seq_stride'], nb_segment_test, config['network_stride'])
 
     train_dl = DataLoader(
         train_ds, 
@@ -204,7 +253,7 @@ def get_dataloaders(config, dataset_path):
     
     val_dl = DataLoader(
         val_ds, 
-        batch_size = config['val_batch_size'],
+        batch_size=batch_size_val,
         sampler=val_sampler,
         num_workers=0,
         pin_memory=True,
@@ -213,7 +262,7 @@ def get_dataloaders(config, dataset_path):
 
     test_dl = DataLoader(
         test_ds, 
-        batch_size = config['val_batch_size'],
+        batch_size=batch_size_test,
         sampler=test_sampler,
         num_workers=0,
         pin_memory=True,

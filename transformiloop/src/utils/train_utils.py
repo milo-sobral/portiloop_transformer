@@ -92,8 +92,7 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
             logging.debug(f"Training batch {batch_idx}")
             print(f"Training batch {batch_idx}")
 
-        loss, _, predictions = simple_run_finetune_batch(
-            batch, classifier, classification_criterion, config, device)
+        loss, predictions, _ = simple_run_finetune_batch(batch, classifier, classification_criterion, config, device, True)
 
         # Optimize parameters
         loss.backward()
@@ -131,21 +130,24 @@ def finetune_test_epoch(dataloader, config, classifier, device):
         total_loss = []
 
         classification_criterion = nn.BCEWithLogitsLoss()
-
+        history, seqs = None, None
         for batch_idx, batch in enumerate(dataloader):
             if batch_idx % config['log_every'] == 0:
                 logging.debug(f"Validation batch {batch_idx}")
                 print(f"Validation batch {batch_idx}")
 
+            if batch_idx == 0:
+                history = torch.zeros((batch[0].size(0), config['seq_len']-1)).to(device)
+
             # Run through model
-            loss, _, predictions = simple_run_finetune_batch(
-                batch, classifier, classification_criterion, config, device)
-            all_preds.append(predictions.detach().cpu())
-            if config['full_transformer']:
-                all_targets.append(batch[2][:, -1].squeeze(-1).detach())
-            else:
+            loss, predictions, seqs = simple_run_finetune_batch(batch, classifier, classification_criterion, config, device, False, seqs=seqs, history=history)
+
+            if predictions is not None:
+                history = history[:, 1:]
+                history = torch.cat([history, predictions.unsqueeze(-1)], dim=1)
+                all_preds.append(predictions.detach().cpu())
                 all_targets.append(batch[2].detach())
-            total_loss.append(loss.cpu().item())
+                total_loss.append(loss.cpu().item())
 
         acc, f1, recall, precision, cm = compute_metrics(torch.stack(
             all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
@@ -153,26 +155,54 @@ def finetune_test_epoch(dataloader, config, classifier, device):
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
 
 
-def simple_run_finetune_batch(batch, classifier, loss, config, device):
-    seqs, _, labels, _, _ = batch
+def simple_run_finetune_batch(batch, classifier, loss, config, device, training, seqs=None, history=None):
+    # Extract info from batch
+    seq, _, labels, _, _ = batch
 
+    # Get the full sequence from history of sequence
+    if training:
+        # Not necessary if training as batch already contains full sequence
+        seqs = seq
+    else:
+        # Append current sequence to end of sequence
+        seqs = torch.cat([seqs, seq.to(device)], dim=1) if seqs is not None else seq
+        # Remove first in sequence if necessary
+        if seqs.size(1) > config['seq_len']:
+            seqs = seqs[:, 1:, :]
+
+    # Copies first element of window over the whole window
     if config['duplicate_as_window']:
         A = torch.ones(seqs.size())
         B = seqs[:, :, -1]
         seqs = A * B.unsqueeze(-1)        
 
+    # Send tensors to device
     seqs = seqs.to(device)
     labels = labels.to(device)
 
+    # Call model with accumulated sequence and history
+    inferred = True
     if config['full_transformer']:
-        history, labels = labels.squeeze(-1).split(labels.size(1)-1, dim=-1)
-        labels = labels.squeeze(-1)
-        logits = classifier(seqs, history).squeeze(-1)
+        if training:
+            # If training, need to split labels to get both history and final label over whole sequence
+            history, labels = labels.squeeze(-1).split(labels.size(1)-1, dim=-1)
+            labels = labels.squeeze(-1)
+        if seqs.size(1) == config['seq_len']:
+            # Perform inferrence if sequence is long enough
+            logits = classifier(seqs, history).squeeze(-1)
+        else:
+            inferred = False
     else:
         logits = classifier(seqs, None).squeeze(-1)
-    loss = loss(logits, labels)
-    predictions = (torch.sigmoid(logits) > config['threshold']).int()
-    return loss, None, predictions
+
+    # If we have performed inference, get predictions and loss and return them
+    if inferred:
+        loss = loss(logits, labels)
+        predictions = (torch.sigmoid(logits) > config['threshold']).int()
+        return loss, predictions, seqs
+
+    # We return None otherwise
+    return None, None, seqs
 
 
 def plot_grad_flow(named_parameters):
