@@ -67,7 +67,7 @@ DEFAULT_CONFIG = {
     'betas': (0.9, 0.99),
     'clip': 0.5,
     'warmup_steps': 250000,
-    'lr_decay': 0.9999,
+    'lr_decay': 0.99999,
     'log_every': 50,
     'dropout': 0.0,
     'epochs': 4000,
