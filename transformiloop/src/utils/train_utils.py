@@ -132,6 +132,12 @@ def finetune_test_epoch(dataloader, config, classifier, device):
         classification_criterion = nn.BCEWithLogitsLoss()
         history, seqs = None, None
         for batch_idx, batch in enumerate(dataloader):
+            
+            # Stop early if we want to set a maximum validation length (usually for testing)
+            if batch_idx > config['max_val_batches'] and config['max_val_batches'] != -1:
+                break
+
+            # Logging ever x epochs
             if batch_idx % config['log_every'] == 0:
                 logging.debug(f"Validation batch {batch_idx}")
                 print(f"Validation batch {batch_idx}")
