@@ -1,25 +1,27 @@
 from transformiloop.src.utils.train import run
 from transformiloop.src.utils.configs import get_default_config
-from transformiloop.src.models.classifiers.classification_encoder_model import ClassificationModel
-from torchinfo import summary
 import torch
 
-config = get_default_config('test')
+def test_training():
+    # Get the config
+    name = 'test'
+    config = get_default_config(name)
 
-save_model = False
-unique_name = True
-pretrain = False
-finetune_encoder = True
+    # Set some variables for testing
+    save_model = False
+    unique_name = True
+    pretrain = False
+    finetune_encoder = True
+    initial_validation = False
 
-print(config)
+    # Modify config so testing does not last too long
+    config['epochs'] = 1
+    config['log_every'] = 1
+    config['batches_per_epoch'] = 10
+    config['max_val_batches'] = config['seq_len'] + 3
 
-# summary(
-#     model,
-#     input_size=[
-#         (config['batch_size'], config['seq_len'], config['window_size'])
-#     ],
-#     dtypes=[torch.float, torch.float, torch.bool],
-#     depth=3,
-# )
+    # Run training for one short epoch to check if everything goes well
+    run(config, 'TESTING_TRANSFORMILOOP', 'Milo-TESTING', save_model, unique_name, pretrain, finetune_encoder, initial_validation)
 
-run(config, 'experiment_full_smalllr', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
+if __name__ == '__main__':
+    test_training()

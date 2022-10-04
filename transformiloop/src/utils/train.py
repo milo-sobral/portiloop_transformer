@@ -22,7 +22,7 @@ from transformiloop.src.utils.train_utils import (finetune_epoch,
                                                   WarmupTransformerLR)
 
 
-def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, finetune_encoder):
+def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, finetune_encoder, initial_validation=True):
 
     time_start = time.time()
 
@@ -99,17 +99,18 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     #         param.requires_grad = False
 
     # Initial validation 
-    val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
-            val_dl, config, classifier, config['device'])
-    loggable_dict = {
-        "Validation Loss": val_loss,
-        "Validation Accuracy": val_acc,
-        "Validation F1": val_f1,
-        "Validation Recall": val_rec,
-        "Validation Precision": val_prec,
-        "Validation Confusion Matrix": val_cm
-    }
-    logger.log(loggable_dict=loggable_dict)
+    if initial_validation:
+        val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
+                val_dl, config, classifier, config['device'])
+        loggable_dict = {
+            "Validation Loss": val_loss,
+            "Validation Accuracy": val_acc,
+            "Validation F1": val_f1,
+            "Validation Recall": val_rec,
+            "Validation Precision": val_prec,
+            "Validation Confusion Matrix": val_cm
+        }
+        # logger.log(loggable_dict=loggable_dict)
 
     # Start of finetuning loop
     for epoch in range(config['epochs']):
