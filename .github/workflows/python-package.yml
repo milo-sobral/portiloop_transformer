@@ -34,6 +34,8 @@ jobs:
         sudo apt-get install -y wget unzip
         wget -L https://github.com/milo-sobral/portiloop_transformer/releases/download/v0.0.1/dataset.zip
         unzip dataset.zip -d transformiloop/dataset
+        mv transformiloop/dataset/dataset/* transformiloop/dataset/
+        rm -rf transformiloop/dataset/dataset
     - name: Test with pytest
       run: |
         pytest --ignore=wandb/
