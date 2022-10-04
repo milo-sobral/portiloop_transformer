@@ -63,10 +63,10 @@ DEFAULT_CONFIG = {
     # Training params
     'max_duration': int(71.5 * 3600),
     'threshold': 0.5, 
-    'lr': 7e-4,
+    'lr': 1e-4,
     'betas': (0.9, 0.99),
     'clip': 0.5,
-    'warmup_steps': 250000,
+    'warmup_steps': 125000,
     'lr_decay': 0.99999,
     'log_every': 50,
     'dropout': 0.0,
