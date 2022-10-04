@@ -72,7 +72,7 @@ DEFAULT_CONFIG = {
     'dropout': 0.0,
     'epochs': 4000,
     'epochs_pretrain': 30,
-    'es_epochs': 1000,
+    'es_epochs': 100000,
     'lam': 0.2,
     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
 
