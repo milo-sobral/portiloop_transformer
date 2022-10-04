@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.10"]
 
     steps:
     - uses: actions/checkout@v3
@@ -29,6 +29,11 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install pytest
         python -m pip install -e .
+    - name: Download dataset
+      run: |
+        sudo apt-get install -y wget unzip
+        wget -L https://github.com/milo-sobral/portiloop_transformer/releases/download/v0.0.1/dataset.zip
+        unzip dataset.zip -d transformiloop/dataset
     - name: Test with pytest
       run: |
         pytest --ignore=wandb/
