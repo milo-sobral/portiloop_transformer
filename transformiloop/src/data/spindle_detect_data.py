@@ -36,7 +36,7 @@ def get_subject_list(config, dataset_path):
     return train_subject, validation_subject, test_subject
 
 class FinetuneDataset(Dataset):
-    def __init__(self, list_subject, config, dataset_path, training, augmentation_config=None, device=None):
+    def __init__(self, list_subject, config, dataset_path, history, augmentation_config=None, device=None):
         self.fe = config['fe']
         self.device = device
         self.window_size = config['window_size']
@@ -51,11 +51,11 @@ class FinetuneDataset(Dataset):
         assert self.window_size <= len(self.data[0]), "Dataset smaller than window size."
         self.full_signal = torch.tensor(self.data[0], dtype=torch.float)
         self.full_labels = torch.tensor(self.data[3], dtype=torch.float)
-        self.seq_len = config['seq_len']  if training else 1  # 1 means single sample / no sequence ?
+        self.seq_len = 1 if config['full_transformer'] and not history else config['seq_len']  # want a single sample if full transformer and not training (aka validating), else we use seq len
         self.seq_stride = config['seq_stride']
         self.past_signal_len = self.seq_len * self.seq_stride
         self.threshold = config['threshold']
-        self.label_history = training
+        self.label_history = history
 
         # list of indices that can be sampled:
         if self.label_history:
