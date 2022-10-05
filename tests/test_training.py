@@ -2,6 +2,18 @@ from transformiloop.src.utils.train import run
 from transformiloop.src.utils.configs import get_default_config
 import torch
 
+
+def single_experiment():
+    config = get_default_config('test')
+
+    save_model = False
+    unique_name = True
+    pretrain = False
+    finetune_encoder = True
+
+    run(config, 'experiment_full_smallwarmup', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
+
+
 def test_training():
     # Get the config
     name = 'test'
@@ -24,4 +36,4 @@ def test_training():
     run(config, 'TESTING_TRANSFORMILOOP', 'Milo-TESTING', save_model, unique_name, pretrain, finetune_encoder, initial_validation)
 
 if __name__ == '__main__':
-    test_training()
+    single_experiment()
