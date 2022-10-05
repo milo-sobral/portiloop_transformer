@@ -11,7 +11,7 @@ def single_experiment():
     pretrain = False
     finetune_encoder = True
 
-    run(config, 'experiment_full_smallwarmup', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
+    run(config, 'experiment_full_posenc', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
 
 
 def test_training():

@@ -30,18 +30,18 @@ DEFAULT_CONFIG = {
     'max_val_batches': -1,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
-    'embedding_size': 64,
+    'embedding_size': 128,
     'full_transformer': True,
 
     # Transformers Params 
-    'd_model': -1,
+    'd_model': 128,
     'n_heads': 8,
     'dim_ff': 256,
     'n_layers': 6,
     'latent_dim': 32,
     'q_dim': 32,
     'v_dim': 32,
-    'encoding_type': EncodingTypes.ONE_HOT_ENCODING,
+    'encoding_type': EncodingTypes.POSITIONAL_ENCODING,
     'normalization': True,
     'final_norm': True,
 
@@ -134,6 +134,9 @@ def validate_config(config):
         config['d_model'] = config['embedding_size'] + config['seq_len']
     elif config['d_model'] < 0:
         raise AttributeError('Issue with embedding dimensions, check your config.') 
+    elif config['d_model'] != config['embedding_size']:
+        config['embedding_size'] = config['d_model']
+
 
     # Check CNN params and make sure CNN params are well initialized
     if not check_valid_cnn(config): 
