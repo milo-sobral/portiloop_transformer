@@ -166,7 +166,7 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device, training,
     seq, _, labels, _, _ = batch
 
     # Get the full sequence from history of sequence
-    if training:
+    if training or not config['full_transformer']:
         # Not necessary if training as batch already contains full sequence
         seqs = seq
     else:
