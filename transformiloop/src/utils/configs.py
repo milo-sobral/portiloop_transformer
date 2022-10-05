@@ -31,7 +31,7 @@ DEFAULT_CONFIG = {
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
     'embedding_size': 128,
-    'full_transformer': True,
+    'full_transformer': False,
 
     # Transformers Params 
     'd_model': 128,
@@ -49,12 +49,12 @@ DEFAULT_CONFIG = {
     'use_cnn_encoder': True,
     'cnn_num_layers': 3,
     'cnn_in_channels': 1,
-    'cnn_channels_multiplier': 4,
-    'cnn_kernel_size': 4,
+    'cnn_channels_multiplier': 2,
+    'cnn_kernel_size': 7,
     'cnn_stride_conv': 1,
     'cnn_padding': 1,
     'cnn_dilation': 1,
-    'pool_kernel_size': 4,
+    'pool_kernel_size': 7,
     'pool_stride_conv': 1,
     'pool_padding': 1,
     'pool_dilation': 1, 
@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     # Training params
     'max_duration': int(71.5 * 3600),
     'threshold': 0.5, 
-    'lr': 7e-4,
+    'lr': 2e-4,
     'betas': (0.9, 0.99),
     'clip': 0.5,
     'warmup_steps': 5000,
