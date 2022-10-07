@@ -138,17 +138,18 @@ class ClassificationModel(nn.Module):
             x = self.encoder(x)
             x = x.view(b, s, -1)
 
+        # x = x[:, -1, :]
         # Positional encoding
         x = self.encode(x)
 
         # Go through feature extractor
-        x = self.transformer_encoder(x)
+        # x = self.transformer_encoder(x)
 
         # Go through transformer decoder with history as x and memory as input
-        if self.full_transformer:
-            history = history.unsqueeze(-1).expand(history.size(0), history.size(1), self.embedding_size)
-            history = self.encode(history)
-            x = self.transformer_decoder(history, x)
+        # if self.full_transformer:
+        #     history = history.unsqueeze(-1).expand(history.size(0), history.size(1), self.embedding_size)
+        #     history = self.encode(history)
+        #     x = self.transformer_decoder(history, x)
 
         # Get latent vector
         x = self.flatten(x)
