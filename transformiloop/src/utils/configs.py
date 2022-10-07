@@ -26,7 +26,7 @@ DEFAULT_CONFIG = {
     'seq_len': 64,
     'window_size': 64,
     'seq_stride': 64,
-    'network_stride': 4,
+    'network_stride': 20,
     'max_val_batches': -1,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,

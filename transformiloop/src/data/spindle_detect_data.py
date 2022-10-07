@@ -168,18 +168,19 @@ class RandomSampler(Sampler):
     def __len__(self):
         return self.length
 
-# class ValidationSampler(Sampler):
-#     def __init__(self, data_source, dividing_factor):
-#         self.len_max = len(data_source)
-#         self.data = data_source
-#         self.dividing_factor = dividing_factor
-#
-#     def __iter__(self):
-#         for idx in range(0, self.len_max, self.dividing_factor):
-#             yield idx
-#
-#     def __len__(self):
-#         return self.len_max // self.dividing_factor
+
+class ValidationSamplerSimple(Sampler):
+    def __init__(self, data_source, dividing_factor):
+        self.len_max = len(data_source)
+        self.data = data_source
+        self.dividing_factor = dividing_factor
+
+    def __iter__(self):
+        for idx in range(0, self.len_max, self.dividing_factor):
+            yield idx
+
+    def __len__(self):
+        return self.len_max // self.dividing_factor
 
 
 class ValidationSampler(Sampler):
@@ -237,11 +238,14 @@ def get_dataloaders(config, dataset_path):
 
     print(f"Batch Size validation: {batch_size_val}")
     print(f"Batch Size test: {batch_size_test}")
-    # val_sampler = ValidationSampler(val_ds, config['val_dividing_factor'])
-    # test_sampler = ValidationSampler(test_ds, config['test_dividing_factor'])
-    val_sampler = ValidationSampler(config['seq_stride'], nb_segment_val, config['network_stride'])
-    test_sampler = ValidationSampler(config['seq_stride'], nb_segment_test, config['network_stride'])
 
+    if config['full_transformer']:
+        val_sampler = ValidationSampler(config['seq_stride'], nb_segment_val, config['network_stride'])
+        test_sampler = ValidationSampler(config['seq_stride'], nb_segment_test, config['network_stride'])
+    else:
+        val_sampler = ValidationSamplerSimple(val_ds, config['network_stride'])
+        test_sampler = ValidationSamplerSimple(test_ds, config['network_stride'])
+    
     train_dl = DataLoader(
         train_ds, 
         batch_size=config['batch_size'],
