@@ -140,7 +140,7 @@ def validate_config(config):
 
     # Check CNN params and make sure CNN params are well initialized
     if not check_valid_cnn(config): 
-        raise AttributeError('Sizes in CNN are not valid, check your config.')
+        return False
 
     # If use_cnn is True, duplicate as windows must be false
     if config['use_cnn_encoder'] and config['duplicate_as_window']:
@@ -150,7 +150,7 @@ def validate_config(config):
     if (config['normalization'] or config['final_norm']) and config['d_model'] < 16:
         raise AttributeError('Cannot use normalization for a d_model < 16, check you config.')
 
-    return config
+    return True
 
 def sample_config_dict(exp_name, prev_exp, all_exps):
     """
