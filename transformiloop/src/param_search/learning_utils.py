@@ -6,11 +6,9 @@ import os
 import pickle as pkl
 # all imports
 import random
-from argparse import ArgumentParser
 from copy import deepcopy
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -18,9 +16,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 
 # from transformiloop.src.param_search.pareto_network import MAXIMIZE_F1_SCORE
-from transformiloop.src.utils.configs import get_default_config, SAMPLEABLE_DICT
-from transformiloop.src.utils.configs import sample_config_dict
-from transformiloop.src.utils.train import run
+from transformiloop.src.utils.configs import SAMPLEABLE_DICT
 
 import wandb
 

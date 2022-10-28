@@ -1,6 +1,6 @@
-from transformiloop.src.utils.configs import get_default_config
+from transformiloop.src.utils.configs import initialize_config
 
 def test_config():
     name = 'Test Name'
-    config = get_default_config(name)
+    config = initialize_config(name)
     assert config is not None

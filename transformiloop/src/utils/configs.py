@@ -13,11 +13,11 @@ class EncodingTypes(Enum):
 EPSILON_NOISE = 0.25 # Proportion of samples which are fully random
 
 
-def get_default_config(name):
+def initialize_config(name):
     global DEFAULT_CONFIG
-    DEFAULT_CONFIG['exp_name'] = name
-    DEFAULT_CONFIG = validate_config(DEFAULT_CONFIG)
-    return DEFAULT_CONFIG
+    config = deepcopy(DEFAULT_CONFIG)
+    config['exp_name'] = name
+    return config
 
 
 DEFAULT_CONFIG = {
@@ -133,7 +133,7 @@ def validate_config(config):
     if config['d_model'] < 0 and config['encoding_type'] == EncodingTypes.ONE_HOT_ENCODING:
         config['d_model'] = config['embedding_size'] + config['seq_len']
     elif config['d_model'] < 0:
-        raise AttributeError('Issue with embedding dimensions, check your config.') 
+        return False
     elif config['d_model'] != config['embedding_size']:
         config['embedding_size'] = config['d_model']
 
@@ -144,11 +144,11 @@ def validate_config(config):
 
     # If use_cnn is True, duplicate as windows must be false
     if config['use_cnn_encoder'] and config['duplicate_as_window']:
-        raise AttributeError('use_cnn_encoder and duplicate_as_window are mutually exclusive, check your config.')
+        return False
 
     # Check if d_model is large enough if we want to use normalization
     if (config['normalization'] or config['final_norm']) and config['d_model'] < 16:
-        raise AttributeError('Cannot use normalization for a d_model < 16, check you config.')
+        return False
 
     return True
 
@@ -164,7 +164,9 @@ def sample_config_dict(exp_name, prev_exp, all_exps):
     Returns:
         (dict, dict): Sampled dictionary and Unrounded version
     """
-    config_dict = get_default_config(exp_name)
+    config_dict = initialize_config(exp_name)
+    if not validate_config(config_dict):
+        raise AttributeError("Issue with your config.")
     flag_in_exps = True
 
     while flag_in_exps:
