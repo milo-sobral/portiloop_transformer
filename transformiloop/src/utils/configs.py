@@ -32,8 +32,9 @@ DEFAULT_CONFIG = {
     'duplicate_as_window': False,
     'embedding_size': 128,
     'full_transformer': False,
-    'pretraining': True,
+    'pretraining': False,
     'modif_ratio': 0.5, 
+    'validation_batch_size': 64,
 
     # Transformers Params 
     'd_model': 128,
@@ -151,6 +152,11 @@ def validate_config(config):
     # Check if d_model is large enough if we want to use normalization
     if (config['normalization'] or config['final_norm']) and config['d_model'] < 16:
         return False
+
+    # If we are pretraining, we only allow length sequences of length 1
+    if config["pretraining"] and config["seq_len"] != 1:
+        return False
+        
 
     return True
 

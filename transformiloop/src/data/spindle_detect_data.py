@@ -1,3 +1,5 @@
+import logging
+import time
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader, Sampler
 from sklearn.model_selection import train_test_split
@@ -35,13 +37,21 @@ def get_subject_list(config, dataset_path):
     
     return train_subject, validation_subject, test_subject
 
+
+def get_data(dataset_path):
+    start = time.time()
+    data = pd.read_csv(os.path.join(dataset_path, DATASET_FILE), header=None).to_numpy()
+    end = time.time()
+    logging.info(f"Loaded data in {(end-start)} seconds...")
+    return data
+
 class FinetuneDataset(Dataset):
-    def __init__(self, list_subject, config, dataset_path, history, augmentation_config=None, device=None, signal_modif=None):
+    def __init__(self, list_subject, config, data, history, augmentation_config=None, device=None, signal_modif=None):
         self.fe = config['fe']
         self.device = device
         self.window_size = config['window_size']
         self.augmentation_config = augmentation_config
-        self.data = pd.read_csv(os.path.join(dataset_path, DATASET_FILE), header=None).to_numpy()
+        self.data = data
         assert list_subject is not None
         used_sequence = np.hstack([range(int(s[1]), int(s[2])) for s in list_subject])
         split_data = np.array(np.split(self.data, int(len(self.data) / (config['len_segment'] + 30 * self.fe))))  # 115+30 = nb seconds per sequence in the dataset
@@ -60,6 +70,7 @@ class FinetuneDataset(Dataset):
         # Check if we are pretrining the model
         self.pretraining = config['pretraining']
         self.modif_ratio = config['modif_ratio']
+        self.signal_modif = signal_modif
 
         # list of indices that can be sampled:
         if self.label_history:
@@ -88,7 +99,10 @@ class FinetuneDataset(Dataset):
 
         if self.pretraining:
             if random.uniform(0, 1) < self.modif_ratio:
-                x_data = self.modif(x_data) if self.modif is not None else self.default_modif(x_data)
+                x_data = self.signal_modif(x_data) if self.signal_modif is not None else self.default_modif(x_data)
+                label = torch.tensor(1, dtype=torch.float)
+            else:
+                label = torch.tensor(0, dtype=torch.float)
         else:
             # Get label for the spindle recognition task
             label_unique = torch.tensor(self.data[3][idx + self.window_size - 1], dtype=torch.float)
@@ -107,14 +121,16 @@ class FinetuneDataset(Dataset):
         #     aug1 = DataTransform_TD(x_data.unsqueeze(0), self.augmentation_config).squeeze(1)
         #     aug1_f = DataTransform_FD(x_data_f.unsqueeze(0), self.device).squeeze(1)
 
-
-
         return x_data, label
 
     def is_spindle(self, idx):
         assert 0 <= idx <= len(self), f"Index out of range ({idx}/{len(self)})."
         idx = self.indices[idx]
         return True if (self.data[3][idx + self.window_size - 1] > self.threshold) else False
+    
+    def default_modif(self, signal):
+        new_sig = signal + 10
+        return new_sig
 
 def get_class_idxs(dataset, distribution_mode):
     """

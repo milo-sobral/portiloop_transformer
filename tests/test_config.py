@@ -1,10 +1,10 @@
-from transformiloop.src.utils.configs import get_default_config, validate_config
+from transformiloop.src.utils.configs import initialize_config, validate_config
 import unittest
 
 class TestFinetuneDataset(unittest.TestCase):
 
     def setUp(self):
-        self.config = get_default_config("TEST_CONFIG")
+        self.config = initialize_config("TEST_CONFIG")
 
     def test_config_None(self):
         self.assertNotEqual(self.config, None)
