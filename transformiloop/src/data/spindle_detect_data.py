@@ -257,7 +257,10 @@ def get_info_subject(subjects, config):
 
 def get_dataloaders(config, dataset_path):
     subs_train, subs_val, subs_test = get_subject_list(config, dataset_path)
-
+    # Use only one subject for each set
+    subs_train = subs_train[:1]
+    subs_val = subs_val[:1]
+    subs_test = subs_test[:1]
     data = get_data(dataset_path)
 
     train_ds = FinetuneDataset(subs_train, config, data, config['full_transformer'], augmentation_config=None, device=config['device'])
