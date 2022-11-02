@@ -11,14 +11,11 @@ import torch.optim as optim
 import wandb
 from torch.nn import BCEWithLogitsLoss
 from torchinfo import summary
-from transformiloop.src.data.pretraining_data import data_generator
 from transformiloop.src.data.spindle_detect_data import get_dataloaders
-from transformiloop.src.utils.configs import get_default_config
 from transformiloop.src.models.classifiers.classification_encoder_model import ClassificationModel
 
 from transformiloop.src.utils.train_utils import (finetune_epoch,
                                                   finetune_test_epoch,
-                                                  pretrain_epoch, 
                                                   WarmupTransformerLR)
 
 

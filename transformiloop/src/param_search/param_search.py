@@ -11,6 +11,7 @@ Possible arguments:
 """
 
 import logging
+import random
 import time
 from argparse import ArgumentParser
 from copy import deepcopy
@@ -25,6 +26,8 @@ from transformiloop.src.param_search.learning_utils import LoggerWandbPareto, RU
 
 from transformiloop.src.utils.train import run
 from transformiloop.src.utils.configs import compare_configs, sample_config_dict
+
+logging.root.setLevel(logging.DEBUG)
 
 IP_SERVER = "" # TODO: Fill this with real IP
 PASSWORD = "Transformiloop password"
@@ -41,12 +44,13 @@ class Meta:
         self.launched = []
         self.best_exp = {}
         self.logger = LoggerWandbPareto(run_name)
+        self.model = None
 
     def run(self):
         """Runs the main behavior of the meta learner
         """
         # Load all the old experiments
-        self.load_experiments()
+        # self.load_experiments()
 
         # Start by sampling the minimum necessary experiments
         for _ in range(self.init_sample_size):
@@ -83,11 +87,17 @@ class Meta:
         chance = random.uniform(0, 1)
         center = {} if chance > EXPLORATION_RATIO else self.best_exp
         for i in range(num_to_sample):
-            pool_of_exps.append(sample_config_dict(f"experiment_{i}", center, self.experiments + pool_of_exps + self.launched))
+            config_dict = sample_config_dict(f"experiment_{i}", center, self.experiments + pool_of_exps + self.launched)[0]
+            exp_dict = {
+                "config_dict": config_dict,
+                "expected": self.model(transform_config_dict_to_input(config_dict)) if self.model is not None else 0,
+                "surprise": 0.0
+            }
+            pool_of_exps.append(exp_dict)
 
         # Get the best expected result out of the ten samples and return it
         with torch.no_grad():
-            best_exp = max(pool_of_exps, key=lambda elem: self.model(transform_config_dict_to_input(elem)))
+            best_exp = max(pool_of_exps, key=lambda elem: elem['expected'])
         return best_exp
 
     def learn_surrogate(self):
@@ -119,7 +129,7 @@ def run_worker(worker, timeout):
     while abs(time.time() - start_time) < timeout:
         worker.notify("worker")
         exp = worker.pop(blocking=True)
-        predicted_loss = exp['cost_software']
+        predicted_loss = exp['expected']
 
         logging.info(f"Launch run with predicted cost: {predicted_loss}")
         best_loss, best_f1_score, exp["best_epoch"] = run(
@@ -130,16 +140,15 @@ def run_worker(worker, timeout):
             pretrain=False,
             finetune_encoder=False)
         logging.debug("Run finished")
-        exp["cost_software"] = 1 - \
-            best_f1_score if MAXIMIZE_F1_SCORE else best_loss
+
         logging.info(f"run finished with actual cost: {exp['cost_software']} (predicted: {predicted_loss})")
-        exp['surprise'] = exp["cost_software"] - predicted_loss
+        exp['surprise'] = best_f1_score - predicted_loss
         
         worker.broadcast(exp, "meta")
     worker.stop()
 
 
-def main(args, data_config=None):
+def main(args):
     # Converting the timeout from hours to seconds
     timeout = args.timeout * 3600
 
@@ -147,9 +156,9 @@ def main(args, data_config=None):
     if args.server:
         logging.debug("now running: server")
         relay = Relay(
-            port=SERVER_PORT,
-            password=PASSWORD,
-            accepted_groups=["meta", "worker"],
+            port=args.port,
+            password=args.password,
+            accepted_groups=None,
             local_com_port=3001,
             header_size=12
         )
@@ -161,25 +170,25 @@ def main(args, data_config=None):
     elif args.worker:
         logging.debug("now running: worker")
         worker_ep = Endpoint(
-            ip_server=IP_SERVER,
-            port=SERVER_PORT,
-            password=PASSWORD,
+            ip_server=args.ip_server,
+            port=args.port,
+            password=args.password,
             groups="worker",
-            local_com_port=3001,
+            local_com_port=3002,
             header_size=12
         )
         run_worker(worker_ep, timeout)
     elif args.meta:
         logging.debug("now running: meta")
         meta_ep = Endpoint(
-            ip_server=IP_SERVER,
-            port=SERVER_PORT,
-            password=PASSWORD,
+            ip_server=args.ip_server,
+            port=args.port,
+            password=args.password,
             groups="meta",
-            local_com_port=3001,
+            local_com_port=3003,
             header_size=12
         )
-        meta_trainer = Meta(meta_ep, timeout=timeout, init_sample_size=args.num_workers)
+        meta_trainer = Meta(meta_ep, "test_run", timeout=timeout, init_sample_size=args.num_workers)
         meta_trainer.run()
     else:
         logging.debug("wrong argument")
@@ -187,23 +196,30 @@ def main(args, data_config=None):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--server', action='store_true')
-    parser.add_argument('--meta', action='store_true')
-    parser.add_argument('--worker', action='store_true')
-    parser.add_argument('--output_file', type=str, default=None)
-    parser.add_argument('--ip_server', type=str, default = "127.0.0.1")
-    parser.add_argument('--dataset_path', type=str, default=None)
-    parser.add_argument('--timeout', type=int, default=1)
+    parser.add_argument('password', type=str, help="Password for communication, must be the same for all nodes.")
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-s', '--server', action='store_true', help="Start the central server for communication.")
+    group.add_argument('-m', '--meta', action='store_true', help="Start the meta-learner and experiment factory.")
+    group.add_argument('-w', '--worker', action='store_true', help="Start a worker.")
+
+    parser.add_argument('--name', type=str, help="Name of the current meta experiment")
+    parser.add_argument('-n', '--num_workers', type=int, default=1, help="Number of workers in this experiment to know how many experiments to sample initially")
+    parser.add_argument('--output_file', type=str, default=None, help="Indicates where experiment data should be saved.")
+    parser.add_argument('--port', type=int, default=3000, help="Server port to use fo communication")
+    parser.add_argument('-ip', '--ip_server', type=str, default = "127.0.0.1", help="Server IP for meta and workers.")
+    parser.add_argument('-t', '--timeout', type=int, default=1, help="Time (in hours) during which experiments should be run.")
 
     args = parser.parse_args()
-    if args.output_file is not None:
-        logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
-                            filename=args.output_file, level=logging.DEBUG)
-    else:
-        logging.basicConfig(
-            format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG)
 
-    # if args.worker:
-    #     dataset_config = initialize_dataset_config(dataset_path=args.dataset_path)
+    if args.meta and not args.name:
+        parser.error("Don't forget to pass a name to initialize a new meta experiment")
 
-    main(args) #, data_config=dataset_config)
+    # if args.output_file is not None:
+    #     logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
+    #                         filename=args.output_file, level=logging.DEBUG)
+    # else:
+    # logging.basicConfig(
+    #     format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG)
+
+    main(args)

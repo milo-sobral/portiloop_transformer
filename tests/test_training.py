@@ -1,11 +1,12 @@
 from transformiloop.src.utils.train import run
-from transformiloop.src.utils.configs import get_default_config
+from transformiloop.src.utils.configs import initialize_config, validate_config
 import torch
 
 
 def single_experiment():
-    config = get_default_config('test')
-
+    config = initialize_config('test')
+    if not validate_config(config):
+        raise AttributeError("Issue with config.")
     save_model = False
     unique_name = True
     pretrain = False
