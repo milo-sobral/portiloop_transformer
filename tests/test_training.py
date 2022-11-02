@@ -14,26 +14,26 @@ def single_experiment():
     run(config, 'experiment_enc_newcnn', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
 
 
-def test_training():
-    # Get the config
-    name = 'test'
-    config = get_default_config(name)
+# def test_training():
+#     # Get the config
+#     name = 'test'
+#     config = get_default_config(name)
 
-    # Set some variables for testing
-    save_model = False
-    unique_name = True
-    pretrain = False
-    finetune_encoder = True
-    initial_validation = False
+#     # Set some variables for testing
+#     save_model = False
+#     unique_name = True
+#     pretrain = False
+#     finetune_encoder = True
+#     initial_validation = False
 
-    # Modify config so testing does not last too long
-    config['epochs'] = 1
-    config['log_every'] = 1
-    config['batches_per_epoch'] = 10
-    config['max_val_batches'] = config['seq_len'] + 3
+#     # Modify config so testing does not last too long
+#     config['epochs'] = 1
+#     config['log_every'] = 1
+#     config['batches_per_epoch'] = 10
+#     config['max_val_batches'] = config['seq_len'] + 3
 
-    # Run training for one short epoch to check if everything goes well
-    run(config, 'TESTING_TRANSFORMILOOP', 'Milo-TESTING', save_model, unique_name, pretrain, finetune_encoder, initial_validation)
+#     # Run training for one short epoch to check if everything goes well
+#     run(config, 'TESTING_TRANSFORMILOOP', 'Milo-TESTING', save_model, unique_name, pretrain, finetune_encoder, initial_validation)
 
 if __name__ == '__main__':
     single_experiment()

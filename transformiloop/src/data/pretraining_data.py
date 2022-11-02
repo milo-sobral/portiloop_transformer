@@ -5,42 +5,43 @@ from transformiloop.src.data.augmentations import DataTransform_FD, DataTransfor
 import torch.fft as fft
 
 
-class PretrainingDataset(Dataset):
-    # Initialize your data, download, etc.
-    def __init__(self, sequences, augmentation_config):
-        super(PretrainingDataset, self).__init__()
-        # shuffle
-        np.random.shuffle(sequences)
-        # X_train, y_train = zip(*data)
-        # X_train, y_train = torch.stack(list(X_train), dim=0), torch.stack(list(y_train), dim=0)
-        X_train = torch.stack(list(sequences), dim=0)
+# class PretrainingDataset(Dataset):
+#     # Initialize your data, download, etc.
+#     def __init__(self, sequences, augmentation_config):
+#         super(PretrainingDataset, self).__init__()
+#         # shuffle
+#         np.random.shuffle(sequences)
+#         # X_train, y_train = zip(*data)
+#         # X_train, y_train = torch.stack(list(X_train), dim=0), torch.stack(list(y_train), dim=0)
+#         X_train = torch.stack(list(sequences), dim=0)
 
-        if len(X_train.shape) < 3:
-            X_train = X_train.unsqueeze(2)
+#         if len(X_train.shape) < 3:
+#             X_train = X_train.unsqueeze(2)
 
-        if X_train.shape.index(min(X_train.shape)) != 1:  # make sure the Channels in second dim
-            X_train = X_train.permute(0, 2, 1)
+#         if X_train.shape.index(min(X_train.shape)) != 1:  # make sure the Channels in second dim
+#             X_train = X_train.permute(0, 2, 1)
 
-        self.x_data = X_train
+#         self.x_data = X_train
 
-        """Transfer x_data to Frequency Domain. If use fft.fft, the output has the same shape; if use fft.rfft, 
-        the output shape is half of the time window."""
+#         """Transfer x_data to Frequency Domain. If use fft.fft, the output has the same shape; if use fft.rfft, 
+#         the output shape is half of the time window."""
 
-        window_length = self.x_data.shape[-1]
-        self.x_data_f = fft.fft(self.x_data).abs() #/(window_length) # rfft for real value inputs.
-        # self.x_data_f = self.x_data_f[:, :, 1:] # not a problem.
+#         window_length = self.x_data.shape[-1]
+#         self.x_data_f = fft.fft(self.x_data).abs() #/(window_length) # rfft for real value inputs.
+#         # self.x_data_f = self.x_data_f[:, :, 1:] # not a problem.
 
-        self.len = X_train.shape[0]
-        """Augmentation"""
+#         self.len = X_train.shape[0]
+#         """Augmentation"""
 
-        self.aug1 = DataTransform_TD(self.x_data, augmentation_config)
-        self.aug1_f = DataTransform_FD(self.x_data_f, augmentation_config['device']) # [7360, 1, 90]
+#         self.aug1 = DataTransform_TD(self.x_data, augmentation_config)
+#         self.aug1_f = DataTransform_FD(self.x_data_f, augmentation_config['device']) # [7360, 1, 90]
 
-    def __getitem__(self, index):
-        return self.x_data[index], self.aug1[index], self.x_data_f[index], self.aug1_f[index]
+#     def __getitem__(self, index):
+#         return self.x_data[index], self.aug1[index], self.x_data_f[index], self.aug1_f[index]
 
-    def __len__(self):
-        return self.len
+#     def __len__(self):
+#         return self.len
+
 
 
 def create_sequences(

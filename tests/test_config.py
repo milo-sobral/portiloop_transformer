@@ -1,6 +1,19 @@
-from transformiloop.src.utils.configs import get_default_config
+from transformiloop.src.utils.configs import get_default_config, validate_config
+import unittest
 
-def test_config():
-    name = 'Test Name'
-    config = get_default_config(name)
-    assert config is not None
+class TestFinetuneDataset(unittest.TestCase):
+
+    def setUp(self):
+        self.config = get_default_config("TEST_CONFIG")
+
+    def test_config_None(self):
+        self.assertNotEqual(self.config, None)
+
+    def test_config_valid(self):
+        self.assertEqual(validate_config(self.config), True)
+
+    def tearDown(self):
+        pass
+
+if __name__ == '__main__':
+    unittest.main()

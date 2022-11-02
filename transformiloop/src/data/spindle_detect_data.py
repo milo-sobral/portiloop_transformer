@@ -36,7 +36,7 @@ def get_subject_list(config, dataset_path):
     return train_subject, validation_subject, test_subject
 
 class FinetuneDataset(Dataset):
-    def __init__(self, list_subject, config, dataset_path, history, augmentation_config=None, device=None):
+    def __init__(self, list_subject, config, dataset_path, history, augmentation_config=None, device=None, signal_modif=None):
         self.fe = config['fe']
         self.device = device
         self.window_size = config['window_size']
@@ -56,6 +56,10 @@ class FinetuneDataset(Dataset):
         self.past_signal_len = self.seq_len * self.seq_stride
         self.threshold = config['threshold']
         self.label_history = history
+
+        # Check if we are pretrining the model
+        self.pretraining = config['pretraining']
+        self.modif_ratio = config['modif_ratio']
 
         # list of indices that can be sampled:
         if self.label_history:
@@ -79,22 +83,33 @@ class FinetuneDataset(Dataset):
         idx = self.indices[idx]
         assert self.data[3][idx + self.window_size - 1] >= 0, f"Bad index: {idx}."
 
+        # Get data 
         x_data = self.full_signal[idx - (self.past_signal_len - self.seq_stride):idx + self.window_size].unfold(0, self.window_size, self.seq_stride)
-        label_unique = torch.tensor(self.data[3][idx + self.window_size - 1], dtype=torch.float)
-        if self.label_history:
-            label_history = self.full_labels[idx - (self.past_signal_len - self.seq_stride) + self.window_size - 1:idx + self.window_size].unfold(0, 1, self.seq_stride)
-            assert len(label_history) == len(x_data), f"len(label):{len(label_history)} != len(x_data):{len(x_data)}"
-            assert -1 not in label_history, f"invalid label: {label_history}"
-            assert label_unique == label_history[-1], f"bad label: {label_unique} != {label_history[-1]}"
-        x_data_f = fft.fft(x_data).abs()
 
-        aug1, aug1_f = torch.zeros(x_data.shape), torch.zeros(x_data_f.shape)
-        if self.augmentation_config is not None:
-            aug1 = DataTransform_TD(x_data.unsqueeze(0), self.augmentation_config).squeeze(1)
-            aug1_f = DataTransform_FD(x_data_f.unsqueeze(0), self.device).squeeze(1)
+        if self.pretraining:
+            if random.uniform(0, 1) < self.modif_ratio:
+                x_data = self.modif(x_data) if self.modif is not None else self.default_modif(x_data)
+        else:
+            # Get label for the spindle recognition task
+            label_unique = torch.tensor(self.data[3][idx + self.window_size - 1], dtype=torch.float)
+            if self.label_history:
+                # Get the label history if we want to learn from that as well.
+                label_history = self.full_labels[idx - (self.past_signal_len - self.seq_stride) + self.window_size - 1:idx + self.window_size].unfold(0, 1, self.seq_stride)
+                assert len(label_history) == len(x_data), f"len(label):{len(label_history)} != len(x_data):{len(x_data)}"
+                assert -1 not in label_history, f"invalid label: {label_history}"
+                assert label_unique == label_history[-1], f"bad label: {label_unique} != {label_history[-1]}"
+            label = label_history if self.label_history else label_unique
 
-        label = label_history if self.label_history else label_unique
-        return x_data, x_data_f, label, aug1, aug1_f
+        # Augmentation/ old contrastive pretraining stuff
+        # x_data_f = fft.fft(x_data).abs()
+        # aug1, aug1_f = torch.zeros(x_data.shape), torch.zeros(x_data_f.shape)
+        # if self.augmentation_config is not None:
+        #     aug1 = DataTransform_TD(x_data.unsqueeze(0), self.augmentation_config).squeeze(1)
+        #     aug1_f = DataTransform_FD(x_data_f.unsqueeze(0), self.device).squeeze(1)
+
+
+
+        return x_data, label
 
     def is_spindle(self, idx):
         assert 0 <= idx <= len(self), f"Index out of range ({idx}/{len(self)})."

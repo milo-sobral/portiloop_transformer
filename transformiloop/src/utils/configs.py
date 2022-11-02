@@ -16,7 +16,6 @@ EPSILON_NOISE = 0.25 # Proportion of samples which are fully random
 def get_default_config(name):
     global DEFAULT_CONFIG
     DEFAULT_CONFIG['exp_name'] = name
-    DEFAULT_CONFIG = validate_config(DEFAULT_CONFIG)
     return DEFAULT_CONFIG
 
 
@@ -32,6 +31,8 @@ DEFAULT_CONFIG = {
     'duplicate_as_window': False,
     'embedding_size': 128,
     'full_transformer': False,
+    'pretraining': True,
+    'modif_ratio': 0.5, 
 
     # Transformers Params 
     'd_model': 128,

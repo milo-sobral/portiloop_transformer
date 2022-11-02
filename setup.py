@@ -18,5 +18,6 @@ setup(name='transformiloop',
         'sklearn',
         'pandas',
         'torchmetrics',
-        'py3nvml']
+        'py3nvml',
+        'tlspyo']
      )
