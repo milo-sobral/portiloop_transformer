@@ -1,3 +1,4 @@
+from copy import deepcopy
 import logging
 import time
 import pandas as pd
@@ -129,7 +130,10 @@ class FinetuneDataset(Dataset):
         return True if (self.data[3][idx + self.window_size - 1] > self.threshold) else False
     
     def default_modif(self, signal):
-        new_sig = signal + 10
+        # Get one random sequence
+        modified_index = random.randint(0, signal.size(0)-1)
+        new_sig = deepcopy(signal)
+        new_sig[modified_index] = -signal[modified_index]
         return new_sig
 
 def get_class_idxs(dataset, distribution_mode):
@@ -254,9 +258,11 @@ def get_info_subject(subjects, config):
 def get_dataloaders(config, dataset_path):
     subs_train, subs_val, subs_test = get_subject_list(config, dataset_path)
 
-    train_ds = FinetuneDataset(subs_train, config, dataset_path, config['full_transformer'], augmentation_config=None, device=config['device'])
-    val_ds = FinetuneDataset(subs_val, config, dataset_path, False, augmentation_config=None, device=config['device'])
-    test_ds = FinetuneDataset(subs_test, config, dataset_path, False, augmentation_config=None, device=config['device'])
+    data = get_data(dataset_path)
+
+    train_ds = FinetuneDataset(subs_train, config, data, config['full_transformer'], augmentation_config=None, device=config['device'])
+    val_ds = FinetuneDataset(subs_val, config, data, False, augmentation_config=None, device=config['device'])
+    test_ds = FinetuneDataset(subs_test, config, data, False, augmentation_config=None, device=config['device'])
 
     idx_true, idx_false = get_class_idxs(train_ds, 0)
 
@@ -277,35 +283,54 @@ def get_dataloaders(config, dataset_path):
         val_sampler = ValidationSamplerSimple(val_ds, config['network_stride'])
         test_sampler = ValidationSamplerSimple(test_ds, config['network_stride'])
     
-    train_dl = DataLoader(
-        train_ds, 
-        batch_size=config['batch_size'],
-        sampler=train_sampler,
-        shuffle=False,
-        num_workers=0,
-        pin_memory=True,
-        drop_last=True)
-    
-    val_dl = DataLoader(
-        val_ds, 
-        batch_size=batch_size_val,
-        sampler=val_sampler,
-        num_workers=0,
-        pin_memory=True,
-        shuffle=False,
-        drop_last=True)
+    if config['pretraining']:
+        train_dl = DataLoader(
+            train_ds, 
+            batch_size=config['batch_size'],
+            shuffle=True,
+            num_workers=0,
+            pin_memory=True,
+            drop_last=True)
+        val_dl = DataLoader(
+            val_ds, 
+            batch_size=config['validation_batch_size'],
+            shuffle=True,
+            num_workers=0,
+            pin_memory=True,
+            drop_last=True)
+        test_dl = DataLoader(
+            test_ds, 
+            batch_size=config['validation_batch_size'],
+            shuffle=True,
+            num_workers=0,
+            pin_memory=True,
+            drop_last=True)
+    else:
+        train_dl = DataLoader(
+            train_ds, 
+            batch_size=config['batch_size'],
+            sampler=train_sampler,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=True,
+            drop_last=True)
+        
+        val_dl = DataLoader(
+            val_ds, 
+            batch_size=batch_size_val,
+            sampler=val_sampler,
+            num_workers=0,
+            pin_memory=True,
+            shuffle=False,
+            drop_last=True)
 
-    test_dl = DataLoader(
-        test_ds, 
-        batch_size=batch_size_test,
-        sampler=test_sampler,
-        num_workers=0,
-        pin_memory=True,
-        shuffle=False,
-        drop_last=True)
+        test_dl = DataLoader(
+            test_ds, 
+            batch_size=batch_size_test,
+            sampler=test_sampler,
+            num_workers=0,
+            pin_memory=True,
+            shuffle=False,
+            drop_last=True)
 
     return train_dl, val_dl, test_dl
-
-
-    def __len__(self):
-        return self.length

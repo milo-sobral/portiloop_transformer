@@ -23,16 +23,16 @@ def initialize_config(name):
 DEFAULT_CONFIG = {
     # Data params
     'batch_size' : 32,
-    'seq_len': 64,
+    'seq_len': 32,
     'window_size': 64,
-    'seq_stride': 64,
+    'seq_stride': 32,
     'network_stride': 20,
     'max_val_batches': -1,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
     'embedding_size': 128,
     'full_transformer': False,
-    'pretraining': False,
+    'pretraining': True,
     'modif_ratio': 0.5, 
     'validation_batch_size': 64,
 
@@ -152,11 +152,6 @@ def validate_config(config):
     # Check if d_model is large enough if we want to use normalization
     if (config['normalization'] or config['final_norm']) and config['d_model'] < 16:
         return False
-
-    # If we are pretraining, we only allow length sequences of length 1
-    if config["pretraining"] and config["seq_len"] != 1:
-        return False
-        
 
     return True
 

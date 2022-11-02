@@ -108,9 +108,9 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
         with torch.no_grad():
             all_preds.append(predictions.detach().cpu())
             if config['full_transformer']:
-                all_targets.append(batch[2][:, -1].squeeze(-1).detach())
+                all_targets.append(batch[1][:, -1].squeeze(-1).detach())
             else:
-                all_targets.append(batch[2].detach())
+                all_targets.append(batch[1].detach())
             total_loss.append(loss.cpu().item())
     
     with torch.no_grad():
@@ -152,7 +152,7 @@ def finetune_test_epoch(dataloader, config, classifier, device):
                 history = history[:, 1:]
                 history = torch.cat([history, predictions.unsqueeze(-1)], dim=1)
                 all_preds.append(predictions.detach().cpu())
-                all_targets.append(batch[2].detach())
+                all_targets.append(batch[1].detach())
                 total_loss.append(loss.cpu().item())
 
         acc, f1, recall, precision, cm = compute_metrics(torch.stack(
@@ -163,7 +163,7 @@ def finetune_test_epoch(dataloader, config, classifier, device):
 
 def simple_run_finetune_batch(batch, classifier, loss, config, device, training, seqs=None, history=None):
     # Extract info from batch
-    seq, _, labels, _, _ = batch
+    seq, labels = batch
 
     # Get the full sequence from history of sequence
     if training or not config['full_transformer']:

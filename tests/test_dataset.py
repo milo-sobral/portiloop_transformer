@@ -32,7 +32,6 @@ class TestDataset(unittest.TestCase):
         # Set the necessary parameters in the config
         self.config["pretraining"] = True
         self.config["modif_ratio"] = 0.5
-        self.config["seq_len"] = 1
         self.assertEqual(validate_config(self.config), True)
 
         # Let's start by loading a small dataset
@@ -57,11 +56,16 @@ class TestDataset(unittest.TestCase):
 
         # Check that the shape of all vectors is in fact what we want
         first_element_train, first_label_train = next(iter(train_dl))
-        self.assertEqual(first_element_train.shape, torch.Size([self.config['batch_size'], 1, self.config['window_size']]))
+        self.assertEqual(first_element_train.shape, torch.Size([self.config['batch_size'], self.config['seq_len'], self.config['window_size']]))
         self.assertEqual(first_label_train.shape, torch.Size([self.config['batch_size']]))
         first_element_val, first_label_val = next(iter(val_dl))
-        self.assertEqual(first_element_val.shape, torch.Size([self.config['validation_batch_size'], 1, self.config['window_size']]))
+        self.assertEqual(first_element_val.shape, torch.Size([self.config['validation_batch_size'], self.config['seq_len'], self.config['window_size']]))
         self.assertEqual(first_label_val.shape, torch.Size([self.config['validation_batch_size']]))
+
+        # Check that default modification works as intended
+        # Gets the first index where the label is zero (no modifications have been made)
+        index = (first_label_train == 0).nonzero()[0]
+        modified = train_ds.default_modif(first_element_train[index])
 
         # Check that the proportion of modified is roughly what we want
         ones, total = 0, 0
@@ -71,6 +75,9 @@ class TestDataset(unittest.TestCase):
             ones += label.sum(dim=0)
             total += label.size(0)
         self.assertAlmostEqual(self.config['modif_ratio'], float(ones/total), places=1)
+
+
+        
         
 
     def tearDown(self):

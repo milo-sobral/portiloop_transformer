@@ -13,6 +13,7 @@ from torch.nn import BCEWithLogitsLoss
 from torchinfo import summary
 from transformiloop.src.data.spindle_detect_data import get_dataloaders
 from transformiloop.src.models.classifiers.classification_encoder_model import ClassificationModel
+from transformiloop.src.utils.configs import initialize_config, validate_config
 
 from transformiloop.src.utils.train_utils import (finetune_epoch,
                                                   finetune_test_epoch,
@@ -27,7 +28,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     # config['d_model'] = config['window_size']
 
     dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
-    pretraining_data_path = dataset_path / 'pretraining_dataset.txt'
+    # pretraining_data_path = dataset_path / 'pretraining_dataset.txt'
     # fi = os.path.join(DATASET_PATH, 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt')
 
     # Initialize WandB logging
@@ -243,3 +244,15 @@ class WandBLogger:
     def restore(self):
         self.wandb_run.restore(self.experiment_name,
                                root=self.dataset_path)
+
+if __name__ == "__main__":
+    
+    config = initialize_config('test')
+    if not validate_config(config):
+        raise AttributeError("Issue with config.")
+    save_model = False
+    unique_name = True
+    pretrain = False
+    finetune_encoder = True
+
+    run(config, 'experiment_newpre', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
