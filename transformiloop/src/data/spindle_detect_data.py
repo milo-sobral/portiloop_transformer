@@ -257,10 +257,10 @@ def get_info_subject(subjects, config):
 
 def get_dataloaders(config, dataset_path):
     subs_train, subs_val, subs_test = get_subject_list(config, dataset_path)
-    # Use only one subject for each set
-    subs_train = subs_train[:1]
-    subs_val = subs_val[:1]
-    subs_test = subs_test[:1]
+    # # Use only one subject for each set
+    # subs_train = subs_train[:1]
+    # subs_val = subs_val[:1]
+    # subs_test = subs_test[:1]
     data = get_data(dataset_path)
 
     train_ds = FinetuneDataset(subs_train, config, data, config['full_transformer'], augmentation_config=None, device=config['device'])
@@ -294,20 +294,6 @@ def get_dataloaders(config, dataset_path):
             num_workers=0,
             pin_memory=True,
             drop_last=True)
-        val_dl = DataLoader(
-            val_ds, 
-            batch_size=config['validation_batch_size'],
-            shuffle=True,
-            num_workers=0,
-            pin_memory=True,
-            drop_last=True)
-        test_dl = DataLoader(
-            test_ds, 
-            batch_size=config['validation_batch_size'],
-            shuffle=True,
-            num_workers=0,
-            pin_memory=True,
-            drop_last=True)
     else:
         train_dl = DataLoader(
             train_ds, 
@@ -318,22 +304,22 @@ def get_dataloaders(config, dataset_path):
             pin_memory=True,
             drop_last=True)
         
-        val_dl = DataLoader(
-            val_ds, 
-            batch_size=batch_size_val,
-            sampler=val_sampler,
-            num_workers=0,
-            pin_memory=True,
-            shuffle=False,
-            drop_last=True)
+    val_dl = DataLoader(
+        val_ds, 
+        batch_size=batch_size_val,
+        sampler=val_sampler,
+        num_workers=0,
+        pin_memory=True,
+        shuffle=False,
+        drop_last=True)
 
-        test_dl = DataLoader(
-            test_ds, 
-            batch_size=batch_size_test,
-            sampler=test_sampler,
-            num_workers=0,
-            pin_memory=True,
-            shuffle=False,
-            drop_last=True)
+    test_dl = DataLoader(
+        test_ds, 
+        batch_size=batch_size_test,
+        sampler=test_sampler,
+        num_workers=0,
+        pin_memory=True,
+        shuffle=False,
+        drop_last=True)
 
     return train_dl, val_dl, test_dl

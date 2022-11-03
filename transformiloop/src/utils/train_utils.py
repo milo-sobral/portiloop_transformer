@@ -85,6 +85,10 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
     classification_criterion = nn.BCEWithLogitsLoss()
 
     for batch_idx, batch in enumerate(dataloader):
+
+        # Make sure we stop after the right amount of validation
+        if batch_idx > config['batches_per_epoch']:
+            break
         
         classifier_optim.zero_grad()
 

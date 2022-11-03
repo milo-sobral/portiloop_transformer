@@ -255,4 +255,4 @@ if __name__ == "__main__":
     pretrain = False
     finetune_encoder = True
 
-    run(config, 'experiment_newpre', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
+    run(config, 'experiment_prefull', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
