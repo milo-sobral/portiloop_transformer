@@ -12,7 +12,7 @@ from transformiloop.src.models.helper_models import TransformerExtractor
 # from fast_transformers.attention import AttentionLayer, FullAttention
 from transformiloop.src.models.embedding_models import PositionalEncoding
 from transformiloop.src.models.masking import FullMask, LengthMask
-from einops import rearrange
+from einops import rearrange, repeat
 from math import sqrt
 from copy import copy, deepcopy
 
@@ -98,13 +98,13 @@ class ClassificationModel(nn.Module):
             (nn.LayerNorm(d_model) if config['final_norm'] else None),
         )
 
+        # Adding CLS token for classification
+        self.cls_token = nn.Parameter(torch.randn(1, 1, d_model))
+
         # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
         self.flatten = nn.Flatten()
         self.full_transformer = config['full_transformer']
-        if self.full_transformer:
-            self.classifier = nn.Linear(d_model * (config['seq_len']-1), 1)
-        else:
-            self.classifier = nn.Linear(d_model * (config['seq_len']), 1)
+        self.classifier = nn.Linear(d_model, 1)
 
         if config['encoding_type'] == EncodingTypes.POSITIONAL_ENCODING: 
             self.pos_encoder = PositionalEncoding(d_model, device=device, dropout=dropout)
@@ -138,6 +138,10 @@ class ClassificationModel(nn.Module):
             x = self.encoder(x)
             x = x.view(b, s, -1)
 
+        # Add the cls token at the beggining of the sequence
+        cls_tokens = repeat(self.cls_token, '1 1 d -> b 1 d', b = x.size(0))
+        x = torch.cat((cls_tokens, x), dim=1)
+
         # Positional encoding
         x = self.encode(x)
 
@@ -150,11 +154,11 @@ class ClassificationModel(nn.Module):
             history = self.encode(history)
             x = self.transformer_decoder(history, x)
 
-        # Get latent vector
-        x = self.flatten(x)
+        # # Get latent vector
+        # x = self.flatten(x)
     
         # # Generate output signal from latent vector
-        x = self.classifier(x)
+        x = self.classifier(x[:, 0])
         return x
     
     def encode(self, x):
