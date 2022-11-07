@@ -255,4 +255,4 @@ if __name__ == "__main__":
     pretrain = False
     finetune_encoder = True
 
-    run(config, 'experiment_clstoken', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
+    run(config, 'experiment_clstoken_smallerlr', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
