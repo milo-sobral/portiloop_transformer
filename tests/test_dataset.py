@@ -48,7 +48,7 @@ class TestDataset(unittest.TestCase):
             drop_last=True)
         val_dl = DataLoader(
             val_ds, 
-            batch_size=self.config['validation_batch_size'],
+            batch_size=self.config['batch_size_validation'],
             shuffle=True,
             num_workers=0,
             pin_memory=True,
@@ -59,8 +59,8 @@ class TestDataset(unittest.TestCase):
         self.assertEqual(first_element_train.shape, torch.Size([self.config['batch_size'], self.config['seq_len'], self.config['window_size']]))
         self.assertEqual(first_label_train.shape, torch.Size([self.config['batch_size']]))
         first_element_val, first_label_val = next(iter(val_dl))
-        self.assertEqual(first_element_val.shape, torch.Size([self.config['validation_batch_size'], self.config['seq_len'], self.config['window_size']]))
-        self.assertEqual(first_label_val.shape, torch.Size([self.config['validation_batch_size']]))
+        self.assertEqual(first_element_val.shape, torch.Size([self.config['batch_size_validation'], self.config['seq_len'], self.config['window_size']]))
+        self.assertEqual(first_label_val.shape, torch.Size([self.config['batch_size_validation']]))
 
         # Check that default modification works as intended
         # Gets the first index where the label is zero (no modifications have been made)
@@ -74,11 +74,7 @@ class TestDataset(unittest.TestCase):
                 break
             ones += label.sum(dim=0)
             total += label.size(0)
-        self.assertAlmostEqual(self.config['modif_ratio'], float(ones/total), places=1)
-
-
-        
-        
+        self.assertAlmostEqual(self.config['modif_ratio'], float(ones/total), places=1)        
 
     def tearDown(self):
         pass

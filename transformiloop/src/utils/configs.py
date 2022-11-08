@@ -3,12 +3,7 @@ from copy import deepcopy
 from math import floor
 from random import choices, uniform, gauss
 import torch
-from enum import Enum
-
-
-class EncodingTypes(Enum):
-    POSITIONAL_ENCODING = 1
-    ONE_HOT_ENCODING = 2
+from transformiloop.src.models.encoding_models import EncodingTypes
 
 EPSILON_NOISE = 0.25 # Proportion of samples which are fully random
 
@@ -35,7 +30,8 @@ DEFAULT_CONFIG = {
     'full_transformer': False,
     'pretraining': False,
     'modif_ratio': 0.5, 
-    'validation_batch_size': 64,
+    'batch_size_validation': 256,
+    'batch_size_test': 256,
 
     # Transformers Params 
     'd_model': 512,
@@ -48,7 +44,6 @@ DEFAULT_CONFIG = {
     'encoding_type': EncodingTypes.POSITIONAL_ENCODING,
     'normalization': True,
     'final_norm': True,
-    'hidden_mlp': 256,
 
     # CNN Params:
     'use_cnn_encoder': True,
@@ -65,6 +60,10 @@ DEFAULT_CONFIG = {
     'pool_dilation': 1, 
     'min_output_size': 64,
     'cnn_linear_size': -1,
+
+    # Classifier_params
+    'hidden_mlp': 256,
+    'use_last': False,
 
     # Training params
     'max_duration': int(71.5 * 3600),
@@ -133,14 +132,34 @@ def validate_config(config):
     Returns:
         Dict: The config, modified if necessary
     """
-    # Check d_model 
-    if config['d_model'] < 0 and config['encoding_type'] == EncodingTypes.ONE_HOT_ENCODING:
-        config['d_model'] = config['embedding_size'] + config['seq_len']
-    elif config['d_model'] < 0:
-        return False
-    elif config['d_model'] != config['embedding_size']:
-        config['embedding_size'] = config['d_model']
+    # # Check d_model 
+    # # If we are not using the cnn encoder, then d_model should be the same as window size
+    # if not config['use_cnn_encoder']:
+    #     config['embedding_size'] = config['window_size']
+    # # If we use one hot encoding, Embedding size+seq_len
+    # if config['encoding_type'] == EncodingTypes.ONE_HOT_ENCODING:
+    #     config['d_model'] = config['embedding_size'] + config['seq_len']
+    # elif config['d_model'] < 0:
+    #     return False
+    # elif config['d_model'] != config['embedding_size']:
+    #     # Any other case, embedding size is the same as d_model
+    #     config['embedding_size'] = config['d_model']
 
+    # Make sure embedding_size is well set
+    if config['use_cnn_encoder'] or config['duplicate_as_window']:
+        # If we are using a CNN or duplicate as window and one hot encoding, embedding size is d_model/2
+        if config['encoding_type'] == EncodingTypes.ONE_HOT_ENCODING:
+            config['embedding_size'] = int(config['d_model'] - config['seq_len'])
+        # If we are using a CNN or duplicate as window and positional encoding, embedding size is d_model
+        elif config['encoding_type'] == EncodingTypes.POSITIONAL_ENCODING:
+            config['embedding_size'] = config['d_model']
+    # If we are using no CNN, embedding size is the window size and we check that d_model is the right dimension
+    else:
+        config['embedding_size'] = config['window_size']
+        if config['encoding_type'] == EncodingTypes.ONE_HOT_ENCODING and config['d_model'] != (config['window_size'] + config['seq_len']):
+            return False
+        elif config['encoding_type'] == EncodingTypes.POSITIONAL_ENCODING and config['d_model'] != config['window_size']:
+            return False
 
     # Check CNN params and make sure CNN params are well initialized
     if not check_valid_cnn(config): 

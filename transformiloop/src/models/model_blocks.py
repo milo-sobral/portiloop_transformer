@@ -1,25 +1,15 @@
-import math
-from tkinter import E
-from xml.etree.ElementPath import xpath_tokenizer_re
 from torch import tensor
 import torch.nn.functional as F
 import torch
 import torch.nn as nn
-from transformiloop.src.models.helper_models import TransformerExtractor
-# from fast_transformers.builders import TransformerEncoderBuilder
-# from fast_transformers.transformers import TransformerEncoder, \
-#     TransformerEncoderLayer
-# from fast_transformers.attention import AttentionLayer, FullAttention
-from transformiloop.src.models.embedding_models import PositionalEncoding
 from transformiloop.src.models.masking import FullMask, LengthMask
-from einops import rearrange, repeat
+from einops import repeat
 from math import sqrt
-from copy import copy, deepcopy
+from copy import deepcopy
+from transformiloop.src.models.encoding_models import PositionalEncoder
 
-from transformiloop.src.utils.configs import EncodingTypes
 
-
-class ClassificationModel(nn.Module):
+class Transformer(nn.Module):
     def __init__(
         self, 
         config
@@ -40,6 +30,9 @@ class ClassificationModel(nn.Module):
         """
         super().__init__()
 
+        self.config = config
+
+        # Initialize the Transformer Encoder and Decoder if necessary
         d_model = config['d_model']
         n_heads = config['n_heads']
         dim_ff = config['dim_ff']
@@ -48,7 +41,7 @@ class ClassificationModel(nn.Module):
         dropout = config['dropout']
         q_dim = config['q_dim']
         v_dim = config['v_dim']
-        
+
         self.transformer_encoder = TransformerEncoder(
             [
                 TransformerEncoderLayer(
@@ -99,31 +92,13 @@ class ClassificationModel(nn.Module):
             )
         else:
             self.transformer_decoder = None
-        # Adding CLS token for classification
-        self.cls_token = nn.Parameter(torch.randn(1, 1, d_model))
 
-        # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
-        # self.flatten = nn.Flatten()
-        self.full_transformer = config['full_transformer']
-        self.classifier = nn.Sequential(
-            nn.Linear(d_model, config['hidden_mlp']),
-            nn.Tanh(),
-            nn.Linear(config['hidden_mlp'], 1)
-        )
+        # Initialize CLS token for classification
+        self.cls_token = nn.Parameter(torch.randn(1, 1, config['embedding_size']))
 
-        if config['encoding_type'] == EncodingTypes.POSITIONAL_ENCODING: 
-            self.pos_encoder = PositionalEncoding(d_model, device=device, dropout=dropout)
-        else: 
-            self.pos_encoder = None
-        
-        self.embedding_size = config['embedding_size']
-        self.encoder = build_encoder_module(config) if config['use_cnn_encoder'] else None
-        self.window_size = config['window_size']
-        self.encoding_type = config['encoding_type'] 
-        self.one_hot_tensor_train = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['batch_size'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
-        self.one_hot_tensor_val = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['batch_size_validation'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
-        self.one_hot_tensor_test = torch.diag(torch.ones(config['seq_len'])).unsqueeze(0).expand(config['batch_size_test'], config['seq_len'], -1).to(config['device']) if self.encoding_type == EncodingTypes.ONE_HOT_ENCODING else None
-
+        # Positional encoder than can do either One hot encoding of position or positional encoder as intended in Transformer
+        self.positional_encoder = PositionalEncoder(config)
+       
     def forward(self, x: tensor, history:tensor):
         """_summary_
 
@@ -135,52 +110,24 @@ class ClassificationModel(nn.Module):
             x_rec (tensor): Output tensor of Dimension [batch_size, seq_len] after going through the Autoencoder model
         """
 
-        # Encode windows using CNN based model
-        if self.encoder is not None:
-            b = x.size(0)
-            s = x.size(1)
-            x = x.contiguous().view(-1, self.window_size).unsqueeze(1)
-            x = self.encoder(x)
-            x = x.view(b, s, -1)
-
         # Add the cls token at the beggining of the sequence
         cls_tokens = repeat(self.cls_token, '1 1 d -> b 1 d', b = x.size(0))
         x = torch.cat((cls_tokens, x), dim=1)
-
-        # Positional encoding
-        x = self.encode(x)
+        
+        # Add positional encoding to our model
+        x = self.positional_encoder(x)
 
         # Go through feature extractor
         x = self.transformer_encoder(x)
 
         # Go through transformer decoder with history as x and memory as input
-        if self.full_transformer:
-            history = history.unsqueeze(-1).expand(history.size(0), history.size(1), self.embedding_size)
-            history = self.encode(history)
+        if self.config['full_transformer']:
+            history = history.unsqueeze(-1).expand(history.size(0), history.size(1), self.config['embedding_size'])
+            history = self.positional_encoder(history)
             x = self.transformer_decoder(history, x)
+    
+        return x
 
-        # # Get latent vector
-        # x = self.flatten(x)
-    
-        # # Generate output signal from latent vector
-        x = self.classifier(x[:, 0])
-        return x
-    
-    def encode(self, x):
-        if self.encoding_type == EncodingTypes.POSITIONAL_ENCODING:
-            x = rearrange(x, 'b s e -> s b e')
-            x = self.pos_encoder(x)
-            x = rearrange(x, 's b e -> b s e')
-        elif self.encoding_type == EncodingTypes.ONE_HOT_ENCODING:
-            if x.size(0) == self.one_hot_tensor_train.size(0):
-                x = torch.cat((x, self.one_hot_tensor_train[:, :x.size(1), :]), -1)
-            elif x.size(0) == self.one_hot_tensor_val.size(0):
-                x = torch.cat((x, self.one_hot_tensor_val[:, :x.size(1), :]), -1)
-            elif x.size(0) == self.one_hot_tensor_test.size(0):
-                x = torch.cat((x, self.one_hot_tensor_test[:, :x.size(1), :]), -1)
-            else:
-                raise ValueError("Missing batch size in one hot encoding.")
-        return x
 
 class TransformerEncoder(nn.Module):
     """TransformerEncoder is little more than a sequence of transformer encoder

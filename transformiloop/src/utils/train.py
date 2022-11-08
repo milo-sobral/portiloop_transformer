@@ -12,7 +12,7 @@ import wandb
 from torch.nn import BCEWithLogitsLoss
 from torchinfo import summary
 from transformiloop.src.data.spindle_detect_data import get_dataloaders
-from transformiloop.src.models.classifiers.classification_encoder_model import ClassificationModel
+from transformiloop.src.models.transformers import ClassificationTransformer
 from transformiloop.src.utils.configs import initialize_config, validate_config
 
 from transformiloop.src.utils.train_utils import (finetune_epoch,
@@ -43,7 +43,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     # pretraining_loader = data_generator(pretraining_data_path, config)
 
     # Load models
-    classifier = ClassificationModel(config)
+    classifier = ClassificationTransformer(config)
     print(summary(
         classifier,
         input_size=[
