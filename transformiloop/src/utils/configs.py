@@ -17,47 +17,49 @@ def initialize_config(name):
     global DEFAULT_CONFIG
     config = deepcopy(DEFAULT_CONFIG)
     config['exp_name'] = name
+    validate_config(config)
     return config
 
 
 DEFAULT_CONFIG = {
     # Data params
     'batch_size' : 32,
-    'seq_len': 32,
+    'seq_len': 64,
     'window_size': 64,
     'seq_stride': 64,
     'network_stride': 20,
     'max_val_batches': -1,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
-    'embedding_size': 128,
+    'embedding_size': 512,
     'full_transformer': False,
     'pretraining': False,
     'modif_ratio': 0.5, 
     'validation_batch_size': 64,
 
     # Transformers Params 
-    'd_model': 128,
+    'd_model': 512,
     'n_heads': 8,
     'dim_ff': 256,
-    'n_layers': 3,
+    'n_layers': 6,
     'latent_dim': 32,
     'q_dim': 32,
     'v_dim': 32,
     'encoding_type': EncodingTypes.POSITIONAL_ENCODING,
     'normalization': True,
     'final_norm': True,
+    'hidden_mlp': 256,
 
     # CNN Params:
     'use_cnn_encoder': True,
     'cnn_num_layers': 3,
     'cnn_in_channels': 1,
-    'cnn_channels_multiplier': 2,
-    'cnn_kernel_size': 7,
+    'cnn_channels_multiplier': 4,
+    'cnn_kernel_size': 4,
     'cnn_stride_conv': 1,
     'cnn_padding': 1,
     'cnn_dilation': 1,
-    'pool_kernel_size': 7,
+    'pool_kernel_size': 4,
     'pool_stride_conv': 1,
     'pool_padding': 1,
     'pool_dilation': 1, 
@@ -70,7 +72,7 @@ DEFAULT_CONFIG = {
     'lr': 2e-4,
     'betas': (0.9, 0.99),
     'clip': 0.5,
-    'warmup_steps': 5000,
+    'warmup_steps': 250000,
     'lr_decay': 0.99999,
     'log_every': 50,
     'dropout': 0.0,
@@ -91,22 +93,21 @@ DEFAULT_CONFIG = {
     # 'data_path': os.path.join(DATASET_PATH, 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt'),
     'len_segment': 115 * 250,
     'fe': 250,
-    'validation_batches': 100000,
     'seed': None,
 
-    # Augmentation Config
-    'jitter_scale_ratio': 1.5,
-    'jitter_ratio': 2,
-    'max_seg': 12,
+    # # Augmentation Config
+    # 'jitter_scale_ratio': 1.5,
+    # 'jitter_ratio': 2,
+    # 'max_seg': 12,
 
-    # Encoder Config
-    'input_channels': 1,
-    'kernel_size': 8, 
-    'stride': 1,
-    'final_out_channels': 128,
-    'CNNoutput_channel': 16,
-    'temperature': 0.2,
-    'use_cosine_similarity': True
+    # # Encoder Config
+    # 'input_channels': 1,
+    # 'kernel_size': 8, 
+    # 'stride': 1,
+    # 'final_out_channels': 128,
+    # 'CNNoutput_channel': 16,
+    # 'temperature': 0.2,
+    # 'use_cosine_similarity': True
 }
 
 SAMPLEABLE_DICT = {
@@ -301,8 +302,9 @@ def check_valid_cnn(config):
         l_out = out_dim(l_out, config['pool_padding'], config['pool_dilation'], config['pool_kernel_size'], config['pool_stride_conv'])
     
     if l_out * channels < config['min_output_size']:
+        logging.info(f"Output size of CNN {l_out * channels} is smaller than minimum {config['min_output_size']}")
         return False
-    config['cnn_linear_size'] = l_out * channels
+    config['cnn_linear_size'] = l_out
     return True
 
 def out_dim(window_size, padding, dilation, kernel, stride):

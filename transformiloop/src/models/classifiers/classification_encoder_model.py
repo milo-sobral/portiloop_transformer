@@ -69,42 +69,47 @@ class ClassificationModel(nn.Module):
             ],
             (nn.LayerNorm(d_model) if config['final_norm'] else None),
         )
-
-        self.transformer_decoder = TransformerDecoder(
-            [
-                TransformerDecoderLayer(
-                    AttentionLayer(
-                        FullAttention(),
+        if config['full_transformer']:
+            self.transformer_decoder = TransformerDecoder(
+                [
+                    TransformerDecoderLayer(
+                        AttentionLayer(
+                            FullAttention(),
+                            d_model,
+                            n_heads,
+                            d_keys=q_dim,
+                            d_values=v_dim,
+                        ),
+                        AttentionLayer(
+                            FullAttention(),
+                            d_model,
+                            n_heads,
+                            d_keys=q_dim,
+                            d_values=v_dim,
+                        ),
                         d_model,
-                        n_heads,
-                        d_keys=q_dim,
-                        d_values=v_dim,
-                    ),
-                    AttentionLayer(
-                        FullAttention(),
-                        d_model,
-                        n_heads,
-                        d_keys=q_dim,
-                        d_values=v_dim,
-                    ),
-                    d_model,
-                    dim_ff,
-                    dropout,
-                    'gelu',
-                    (nn.LayerNorm(d_model) if config['normalization'] else None)
-                )
-                for _ in range(n_layers)
-            ],
-            (nn.LayerNorm(d_model) if config['final_norm'] else None),
-        )
-
+                        dim_ff,
+                        dropout,
+                        'gelu',
+                        (nn.LayerNorm(d_model) if config['normalization'] else None)
+                    )
+                    for _ in range(n_layers)
+                ],
+                (nn.LayerNorm(d_model) if config['final_norm'] else None),
+            )
+        else:
+            self.transformer_decoder = None
         # Adding CLS token for classification
         self.cls_token = nn.Parameter(torch.randn(1, 1, d_model))
 
         # self.latent = MLPLatent(num_classes, 1, d_model, seq_len, device)
-        self.flatten = nn.Flatten()
+        # self.flatten = nn.Flatten()
         self.full_transformer = config['full_transformer']
-        self.classifier = nn.Linear(d_model, 1)
+        self.classifier = nn.Sequential(
+            nn.Linear(d_model, config['hidden_mlp']),
+            nn.Tanh(),
+            nn.Linear(config['hidden_mlp'], 1)
+        )
 
         if config['encoding_type'] == EncodingTypes.POSITIONAL_ENCODING: 
             self.pos_encoder = PositionalEncoding(d_model, device=device, dropout=dropout)
@@ -634,8 +639,8 @@ def build_encoder_module(config):
         in_channels = out_channels
     
     # Generating Linear to project CNN output onto d_model
+    model.append(nn.Linear(config['cnn_linear_size'], config['embedding_size']//out_channels))
     model.append(nn.Flatten())
-    model.append(nn.Linear(config['cnn_linear_size'], config['embedding_size']))
     model.append(nn.ReLU())
     return model
 
