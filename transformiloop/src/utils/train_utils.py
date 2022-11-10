@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-from transformiloop.src.models.TFC.losses import NTXentLoss_poly
 import torch.nn as nn
 import os
 import json
@@ -22,58 +21,6 @@ def save_model(save_path, model, config):
         json.dump(saveable_config, f)
     torch.save(model.state_dict(), os.path.join(save_path, "model"))
 
-
-def pretrain_epoch(model, model_optimizer, train_loader, config, device):
-    total_loss = []
-    losses_t = []
-    losses_f = []
-    losses_c = []
-    model.train()
-
-    for batch_idx, (data, aug1, data_f, aug1_f) in enumerate(train_loader):
-
-        # Set up data
-        data, aug1 = data.float().to(device), aug1.float().to(device)
-        data_f, aug1_f = data_f.float().to(device), aug1_f.float().to(device)
-
-        # optimizer
-        model_optimizer.zero_grad()
-
-        """Produce embeddings"""
-        h_t, z_t, h_f, z_f = model(data, data_f)
-        h_t_aug, z_t_aug, h_f_aug, z_f_aug = model(aug1, aug1_f)
-
-        """Compute Pre-train loss"""
-        """NTXentLoss: normalized temperature-scaled cross entropy loss. From SimCLR"""
-        nt_xent_criterion = NTXentLoss_poly(device, config['batch_size'], config['temperature'],
-                                            config['use_cosine_similarity'])
-
-        loss_t = nt_xent_criterion(h_t, h_t_aug)
-        loss_f = nt_xent_criterion(h_f, h_f_aug)
-
-        l_TF = nt_xent_criterion(z_t, z_f)
-        l_1, l_2, l_3 = nt_xent_criterion(z_t, z_f_aug), nt_xent_criterion(
-            z_t_aug, z_f), nt_xent_criterion(z_t_aug, z_f_aug)
-        loss_c = (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
-
-        lam = config['lam']
-        loss = lam * (loss_t + loss_f) + (1 - lam) * loss_c
-
-        losses_t.append(loss_t.item())
-        losses_f.append(loss_f.item())
-        losses_c.append(loss_c.item())
-        total_loss.append(loss.item())
-        loss.backward()
-        model_optimizer.step()
-        if batch_idx % 100 == 0:
-            print('pre-training: overall loss:{}, l_t: {}, l_f:{}, l_c:{}'.format(loss,
-                  loss_t, loss_f, loss_c))
-    total_loss = torch.tensor(total_loss).mean()
-    loss_t = torch.tensor(losses_t).mean()
-    loss_f = torch.tensor(losses_f).mean()
-    loss_c = torch.tensor(losses_c).mean()
-
-    return total_loss, loss_t, loss_f, loss_c
 
 def finetune_epoch(dataloader, config, device, classifier, classifier_optim, scheduler):
     classifier.train()
@@ -178,13 +125,7 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device, training,
         seqs = torch.cat([seqs, seq.to(device)], dim=1) if seqs is not None else seq
         # Remove first in sequence if necessary
         if seqs.size(1) > config['seq_len']:
-            seqs = seqs[:, 1:, :]
-
-    # Copies first element of window over the whole window
-    if config['duplicate_as_window']:
-        A = torch.ones(seqs.size())
-        B = seqs[:, :, -1]
-        seqs = A * B.unsqueeze(-1)        
+            seqs = seqs[:, 1:, :]      
 
     # Send tensors to device
     seqs = seqs.to(device)

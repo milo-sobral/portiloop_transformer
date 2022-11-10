@@ -115,13 +115,6 @@ class FinetuneDataset(Dataset):
                 assert label_unique == label_history[-1], f"bad label: {label_unique} != {label_history[-1]}"
             label = label_history if self.label_history else label_unique
 
-        # Augmentation/ old contrastive pretraining stuff
-        # x_data_f = fft.fft(x_data).abs()
-        # aug1, aug1_f = torch.zeros(x_data.shape), torch.zeros(x_data_f.shape)
-        # if self.augmentation_config is not None:
-        #     aug1 = DataTransform_TD(x_data.unsqueeze(0), self.augmentation_config).squeeze(1)
-        #     aug1_f = DataTransform_FD(x_data_f.unsqueeze(0), self.device).squeeze(1)
-
         return x_data, label
 
     def is_spindle(self, idx):
