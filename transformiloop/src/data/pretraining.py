@@ -21,7 +21,7 @@ def read_patient_info(dataset_path):
 
         patient_info = {
             line[0]: {
-                'age': int(line[1]), 
+                'age': int(line[1]),
                 'gender': line[2]
             } for line in reader
         }
@@ -41,8 +41,12 @@ def read_pretraining_dataset(dataset_path):
                 patient_info[patient_id]['signal'] = edf_file.readSignal(0)
         except FileNotFoundError:
             print(f"Skipping file {filename} as it is not in dataset.")
-    
-    return patient_info
+
+    # Remove all patients whose signal is not in dataset
+    dataset = {patient_id: patient_details for (patient_id, patient_details) in patient_info.items()
+        if 'signal' in patient_info[patient_id].keys()}
+
+    return dataset
 
 
 class PretrainingDataset(Dataset):
@@ -65,20 +69,25 @@ class PretrainingDataset(Dataset):
 
         print(f"DEBUG: {self.nb_subjects} subjects:")
         for subject in self.subjects:
-            print(f"DEBUG: {subject}, {data[subject]['gender']}, {data[subject]['age']} yo")
+            print(
+                f"DEBUG: {subject}, {data[subject]['gender']}, {data[subject]['age']} yo")
 
         self.seq_len = config['seq_len']
         self.seq_stride = config['seq_stride']
-        self.past_signal_len = (self.seq_len - 1) * self.seq_stride  # signal needed before the last window
-        self.min_signal_len = self.past_signal_len + self.window_size  # signal needed for one sample
+        # signal needed before the last window
+        self.past_signal_len = (self.seq_len - 1) * self.seq_stride
+        self.min_signal_len = self.past_signal_len + \
+            self.window_size  # signal needed for one sample
 
         self.full_signal = []
         self.genders = []
         self.ages = []
 
         for subject in self.subjects:
-            assert self.min_signal_len <= len(data[subject]['signal']), f"Signal {subject} is too short."
-            data[subject]['signal'] = torch.tensor(data[subject]['signal'], dtype=torch.float)
+            assert self.min_signal_len <= len(
+                data[subject]['signal']), f"Signal {subject} is too short."
+            data[subject]['signal'] = torch.tensor(
+                data[subject]['signal'], dtype=torch.float)
             self.full_signal.append(data[subject]['signal'])
             gender = 1 if data[subject]['gender'] == 'M' else 0
             age = data[subject]['age']
@@ -89,12 +98,22 @@ class PretrainingDataset(Dataset):
             self.ages.append(age_tensor)
             del data[subject]  # we delete this as it is not needed anymore
 
-        self.full_signal = torch.cat(self.full_signal)  # all signals concatenated (float32)
-        self.genders = torch.cat(self.genders)  # all corresponding genders (uint8)
+        # all signals concatenated (float32)
+        self.full_signal = torch.cat(self.full_signal)
+        # all corresponding genders (uint8)
+        self.genders = torch.cat(self.genders)
         self.ages = torch.cat(self.ages)  # all corresponding ages (uint8)
         assert len(self.full_signal) == len(self.genders) == len(self.ages)
 
         self.samplable_len = len(self.full_signal) - self.min_signal_len + 1
+
+        # Masking probabilities
+        prob_not_masked = 1 - config['ratio_masked']
+        prob_masked = config['ratio_masked'] * (1 - (config['ratio_replaced'] + config['ratio_kept']))
+        prob_replaced = config['ratio_masked'] * config['ratio_replaced']
+        prob_kept = config['ratio_masked'] * config['ratio_kept']
+        self.mask_probs = torch.tensor([prob_not_masked, prob_masked, prob_replaced, prob_kept])
+        self.mask_cum_probs = self.mask_probs.cumsum(0)
 
     def __len__(self):
         return self.samplable_len
@@ -105,8 +124,19 @@ class PretrainingDataset(Dataset):
         idx += self.past_signal_len
 
         # Get data
-        x_data = self.full_signal[idx - self.past_signal_len:idx + self.window_size].unfold(0, self.window_size, self.seq_stride)  # TODO: double-check
-        x_gender = self.genders[idx + self.window_size - 1]  # TODO: double-check
+        x_data = self.full_signal[idx - self.past_signal_len:idx + self.window_size].unfold(
+            0, self.window_size, self.seq_stride)  # TODO: double-check
+        # TODO: double-check
+        x_gender = self.genders[idx + self.window_size - 1]
         x_age = self.ages[idx + self.window_size - 1]  # TODO: double-check
+        
+        # Get random mask from given probabilities:
+        mask = torch.searchsorted(self.mask_cum_probs, torch.rand(self.seq_len))
 
-        return x_data, x_gender, x_age
+        # Get replacements for those where necessary
+        num_replaced = int(torch.bincount(mask, minlength=4)[2])
+        replacements = [self.full_signal[random_idx: random_idx+self.window_size] \
+            for random_idx in torch.randint(high=len(self)-self.window_size, size=(num_replaced, ))]
+        replacements += [torch.zeros(self.window_size)] * (self.seq_len - len(replacements))
+
+        return x_data, x_gender, x_age, mask, replacements

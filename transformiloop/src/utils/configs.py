@@ -87,6 +87,11 @@ DEFAULT_CONFIG = {
     'num_datapoints': 100000,
     'es_delta': 0.01,
 
+    # Masking params
+    'ratio_masked': 0.5,
+    'ratio_replaced': 0.15,
+    'ratio_kept': 0.15,
+
     # Finetuning data config
     # 'subjects_path': DATASET_PATH,
     # 'data_path': os.path.join(DATASET_PATH, 'dataset_classification_full_big_250_matlab_standardized_envelope_pf.txt'),

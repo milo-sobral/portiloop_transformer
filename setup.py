@@ -19,5 +19,6 @@ setup(name='transformiloop',
         'pandas',
         'torchmetrics',
         'py3nvml',
-        'tlspyo']
+        'tlspyo',
+        'pyedflib']
      )
