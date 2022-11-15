@@ -38,4 +38,4 @@ jobs:
         rm -rf transformiloop/dataset/dataset
     - name: Test with pytest
       run: |
-        pytest --ignore=wandb/
+        pytest tests

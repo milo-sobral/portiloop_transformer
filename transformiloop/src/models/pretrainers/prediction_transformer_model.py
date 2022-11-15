@@ -1,1 +1,0 @@
-# TODO: Full transformer based model
