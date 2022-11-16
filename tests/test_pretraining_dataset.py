@@ -34,8 +34,6 @@ class TestPretrainingDataset(unittest.TestCase):
         )
 
         signal, gender, age, mask, reps = next(iter(pre_dl))
-        print(mask)
-        print(reps)
         self.assertEqual(signal.shape, torch.Size([self.config['batch_size'], self.config['seq_len'], self.config['window_size']]))       
         self.assertTrue(gender[0] == 0 or gender[0] == 1)
         self.assertTrue(age[0] >= 18 and age[0] <= 76) 

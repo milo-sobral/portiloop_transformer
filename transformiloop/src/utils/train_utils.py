@@ -8,6 +8,7 @@ from matplotlib.lines import Line2D
 import logging
 import wandb
 from torch.optim.lr_scheduler import _LRScheduler
+from copy import deepcopy
 
 def save_model(save_path, model, config):
     if not os.path.exists(save_path):
@@ -20,6 +21,57 @@ def save_model(save_path, model, config):
     with open(os.path.join(save_path, 'config.json'), 'w') as f:
         json.dump(saveable_config, f)
     torch.save(model.state_dict(), os.path.join(save_path, "model"))
+
+
+def seq_rec_loss(predictions, expected, mask):
+    loss = nn.MSELoss()
+    mask = torch.where(mask==0, mask, 1).unsqueeze(-1)
+    mask = mask.expand(mask.size(0), mask.size(1), predictions.size(-1))
+    return loss(predictions * mask, expected * mask)
+    
+
+def pretrain_epoch(dataloader, config, device, model, optim, scheduler):
+    model.train()
+
+    # TODO: Add the metrics for all tasks to keep track of training
+    mse_loss = nn.MSELoss()
+    losses = {
+        'gender': nn.BCEWithLogitsLoss(),
+        'age': mse_loss,
+        'seq_rec': (lambda pred, exp : seq_rec_loss(pred, exp, mse_loss))
+    }
+
+    for batch_idx, batch in enumerate(dataloader):
+        optim.zero_grad()
+        if batch_idx % config['log_every'] == 0:
+            logging.debug(f"Training batch {batch_idx}")
+
+        loss, _, predictions = run_pretrain_batch(batch, model, losses)
+
+        loss.backwards()
+        optim.step()
+        scheduler.step()
+
+
+def run_pretrain_batch(batch, model, losses):
+    # Extract batch info
+    signal, gender_y, age_y, mask, masked_seq = batch
+
+    # Run model masked and unmasked to get all results
+    gender_pred, age_pred, _ = model(signal, None, None)
+    _, _, seq_rec_pred = model, masked_seq, None, mask
+
+    # Get all the losses from all results for each task
+    loss_gender = losses['gender'](gender_pred, gender_y)
+    loss_age = losses['age'](age_pred, age_y)
+    loss_seq_rec = losses['seq_rec'](seq_rec_pred, signal, mask)
+
+    # Combine all losses by simply averaging
+    loss = (loss_age + loss_gender + loss_seq_rec) / 3.0
+
+    # Returns losses and predictions
+    return loss, [loss_age, loss_gender, loss_seq_rec], [gender_pred, age_pred, seq_rec_pred]
+    
 
 
 def finetune_epoch(dataloader, config, device, classifier, classifier_optim, scheduler):

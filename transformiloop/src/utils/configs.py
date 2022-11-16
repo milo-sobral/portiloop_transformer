@@ -86,6 +86,7 @@ DEFAULT_CONFIG = {
     'num_training_sets': 3,
     'num_datapoints': 100000,
     'es_delta': 0.01,
+    'reconstruction_dim': 64,
 
     # Masking params
     'ratio_masked': 0.5,

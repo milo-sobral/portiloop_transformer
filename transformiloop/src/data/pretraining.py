@@ -1,3 +1,4 @@
+from copy import deepcopy
 import os
 import csv
 import pyedflib
@@ -133,10 +134,18 @@ class PretrainingDataset(Dataset):
         # Get random mask from given probabilities:
         mask = torch.searchsorted(self.mask_cum_probs, torch.rand(self.seq_len))
 
-        # Get replacements for those where necessary
-        num_replaced = int(torch.bincount(mask, minlength=4)[2])
-        replacements = [self.full_signal[random_idx: random_idx+self.window_size] \
-            for random_idx in torch.randint(high=len(self)-self.window_size, size=(num_replaced, ))]
-        replacements += [torch.zeros(self.window_size)] * (self.seq_len - len(replacements))
 
-        return x_data, x_gender, x_age, mask, replacements
+        # Get the sequence for masked sequence modeling
+        masked_seq = deepcopy(x_data)
+        for seq_idx, mask_token in enumerate(mask):
+            # No mask or skip mask or MASK token (which is done later)
+            if mask_token in [0, 1, 3]: 
+                continue
+            elif mask_token == 2:
+                # Replace token with replacement
+                random_idx = int(torch.randint(high=len(self)-self.window_size, size=(1, )))
+                masked_seq[seq_idx] = self.full_signal[random_idx: random_idx+self.window_size]
+            else:
+                raise RuntimeError("Issue with masks, shouldn't get a value not in {0, 1, 2, 3}")
+
+        return x_data, x_gender, x_age, mask, masked_seq

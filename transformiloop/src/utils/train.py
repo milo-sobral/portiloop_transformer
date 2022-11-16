@@ -20,6 +20,15 @@ from transformiloop.src.utils.train_utils import (finetune_epoch,
                                                   WarmupTransformerLR)
 
 
+def pretrain(config, wandb_group, wandb_project):
+    time_start = time.time()
+    config['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset' / 'pre_ds'
+
+    
+
+
 def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, finetune_encoder, initial_validation=True):
 
     time_start = time.time()
