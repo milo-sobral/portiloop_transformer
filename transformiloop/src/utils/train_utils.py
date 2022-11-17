@@ -23,8 +23,7 @@ def save_model(save_path, model, config):
     torch.save(model.state_dict(), os.path.join(save_path, "model"))
 
 
-def seq_rec_loss(predictions, expected, mask):
-    loss = nn.MSELoss()
+def seq_rec_loss(predictions, expected, mask, loss):
     mask = torch.where(mask==0, mask, 1).unsqueeze(-1)
     mask = mask.expand(mask.size(0), mask.size(1), predictions.size(-1))
     return loss(predictions * mask, expected * mask)
@@ -38,7 +37,7 @@ def pretrain_epoch(dataloader, config, device, model, optim, scheduler):
     losses = {
         'gender': nn.BCEWithLogitsLoss(),
         'age': mse_loss,
-        'seq_rec': (lambda pred, exp : seq_rec_loss(pred, exp, mse_loss))
+        'seq_rec': (lambda pred, exp, mask: seq_rec_loss(pred, exp, mask, mse_loss))
     }
 
     for batch_idx, batch in enumerate(dataloader):
@@ -59,11 +58,11 @@ def run_pretrain_batch(batch, model, losses):
 
     # Run model masked and unmasked to get all results
     gender_pred, age_pred, _ = model(signal, None, None)
-    _, _, seq_rec_pred = model, masked_seq, None, mask
+    _, _, seq_rec_pred = model(masked_seq, None, mask)
 
     # Get all the losses from all results for each task
-    loss_gender = losses['gender'](gender_pred, gender_y)
-    loss_age = losses['age'](age_pred, age_y)
+    loss_gender = losses['gender'](gender_pred, gender_y.float())
+    loss_age = losses['age'](age_pred, age_y.float())
     loss_seq_rec = losses['seq_rec'](seq_rec_pred, signal, mask)
 
     # Combine all losses by simply averaging
