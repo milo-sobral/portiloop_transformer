@@ -5,28 +5,89 @@ import pprint
 import time
 from re import L
 import pathlib
+from torch.utils.data import DataLoader
 
 import torch
 import torch.optim as optim
 import wandb
 from torch.nn import BCEWithLogitsLoss
 from torchinfo import summary
+from transformiloop.src.data.pretraining import PretrainingDataset
 from transformiloop.src.data.spindle_detection import get_dataloaders
-from transformiloop.src.models.transformers import ClassificationTransformer
+from transformiloop.src.models.transformers import ClassificationTransformer, TransformiloopPretrain
 from transformiloop.src.utils.configs import initialize_config, validate_config
 
 from transformiloop.src.utils.train_utils import (finetune_epoch,
                                                   finetune_test_epoch,
-                                                  WarmupTransformerLR)
+                                                  WarmupTransformerLR, pretrain_epoch)
 
 
 def pretrain(config, wandb_group, wandb_project):
+
+    # Basic initial setup
     time_start = time.time()
     config['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset' / 'pre_ds'
-
+    # Set up all the dataset and model path
+    home_path = pathlib.Path(__file__).parents[2].resolve()
+    dataset_path = home_path / 'dataset' / 'pre_ds'
+    models_path = home_path / 'models'
+    models_path.mkdir(exist_ok=True)
     
+    # Initialize the model
+    model = TransformiloopPretrain(config)
+
+    # Initialize the pretraining dataloader
+    pre_dataset = PretrainingDataset(dataset_path, config)
+    pretrain_dl = DataLoader(
+        pre_dataset, 
+        batch_size=config['batch_size'],
+        shuffle=True,
+        pin_memory=True,
+        drop_last=True
+    )
+
+    # Initialize the pretraining optimizer
+    optimizer = optim.AdamW(
+        model.parameters(),
+        lr=config["lr"],
+        betas=config["betas"]
+    )
+
+    # Initialize the Learning rate scheduler
+    scheduler = WarmupTransformerLR(
+        config["classifier_optimizer"],
+        config['warmup_steps'],
+        config['lr'],
+        config['lr_decay']
+    )
+
+    # Set up a new WandB run
+    exp_name = f"A smart way to create a name from the config"
+    os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
+    wandb_run = wandb.init(
+        project=wandb_project,
+        id=exp_name,
+        resume='allow',
+        config=config,
+        reinit=True,
+        group=wandb_group,
+        save_code=True)
+
+    for epoch in range(config['epochs']):
+        try:
+            pretrain_epoch(
+                pretrain_dl, 
+                config, 
+                model, 
+                optimizer,
+                scheduler, 
+                wandb_run
+            )
+        except Exception as e:
+            wandb_run.finish()
+            print(f"Pretraining stopped due to an exception during epoch {epoch}...")
+            raise e
 
 
 def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, finetune_encoder, initial_validation=True):

@@ -29,10 +29,9 @@ def seq_rec_loss(predictions, expected, mask, loss):
     return loss(predictions * mask, expected * mask)
     
 
-def pretrain_epoch(dataloader, config, device, model, optim, scheduler):
+def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger):
     model.train()
 
-    # TODO: Add the metrics for all tasks to keep track of training
     mse_loss = nn.MSELoss()
     losses = {
         'gender': nn.BCEWithLogitsLoss(),
@@ -40,16 +39,58 @@ def pretrain_epoch(dataloader, config, device, model, optim, scheduler):
         'seq_rec': (lambda pred, exp, mask: seq_rec_loss(pred, exp, mask, mse_loss))
     }
 
+    averages = {
+        'combined': 0,
+        'gender': 0,
+        'age': 0,
+        'seq_rec': 0
+    }
+
+    # Run through dataset
+    max_batch_idx = 0
     for batch_idx, batch in enumerate(dataloader):
         optim.zero_grad()
+
         if batch_idx % config['log_every'] == 0:
             logging.debug(f"Training batch {batch_idx}")
 
-        loss, _, predictions = run_pretrain_batch(batch, model, losses)
-
+        # run through model
+        loss, losses, _ = run_pretrain_batch(batch, model, losses)
+        
+        # Update model parameters and step scheduler
         loss.backwards()
         optim.step()
         scheduler.step()
+
+        # Keep track of the losses
+        with torch.no_grad():
+            averages['combined'] += loss.item().detach().cpu()
+            averages['age'] += losses[0].item().detach().cpu()
+            averages['gender'] += losses[1].item().detach().cpu()
+            averages['seq_rec'] += losses[2].item().detach().cpu()
+        max_batch_idx = batch_idx
+
+        # Log the progress with wandb
+        if batch_idx % config['log_every'] == 0:
+            wandblogger.log({
+                'combined_loss': averages['combined'] / float(batch_idx),
+                'age_loss': averages['age'] / float(batch_idx),
+                'gender_loss': averages['gender'] / float(batch_idx),
+                'seq_rec_loss': averages['seq_rec'] / float(batch_idx),
+                'learning_rate': float(optim.param_groups[0]['lr'])
+            })
+        
+        # Check if we are better than model and save model to wandb if we are
+        # TODO : 
+        #   - Check if we are better than the best model so far
+        #   - Save model weights to disk
+        #   - Copy model weights to wandb
+
+    # Compute the average of all the losses for all the batches in our training
+    for key in averages.keys():
+        averages[key] / max_batch_idx
+    
+    return averages
 
 
 def run_pretrain_batch(batch, model, losses):
@@ -292,67 +333,3 @@ class WarmupTransformerLR(_LRScheduler):
         else:
             return [(group['lr'] * self.decay) for group in self.optimizer.param_groups]
 
-
-# DEPRECATED
-# def run_finetune_batch(batch, model, classifier, class_loss, threshold, lam, device):
-#     # loss_c = None
-#     # loss_t = None
-#     # loss_f = None
-
-#     encoded = []
-#     seqs, freqs, labels, seq_augs, freq_augs = batch
-#     seqs, freqs = seqs.float().to(device), freqs.float().to(device)
-#     seq_augs, freq_augs = seq_augs.float().to(device), freq_augs.float().to(device)
-
-#     # Run through encoder model
-#     for i in range(seqs.size(1)):
-#         seq = seqs[:, i, :].unsqueeze(1)
-#         freq = freqs[:, i, :].unsqueeze(1)
-#         # seq_aug = seq_augs[:, :, i, :]
-#         # freq_aug = freq_augs[:, :, i, :]
-
-#         h_t, z_t, h_f, z_f = model(seq, freq)
-#         # h_t_aug, z_t_aug, h_f_aug, z_f_aug = model(seq_aug, freq_aug)
-
-#         # l_TF = model_loss(z_t, z_f)
-#         # l_1, l_2, l_3 = model_loss(z_t, z_f_aug), model_loss(
-#         #     z_t_aug, z_f), model_loss(z_t_aug, z_f_aug)
-
-#         # if loss_c is None:
-#         #     loss_c = (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
-#         #     loss_t = model_loss(h_t, h_t_aug)
-#         #     loss_f = model_loss(h_f, h_f_aug)
-#         # else:
-#         #     loss_c += (1 + l_TF - l_1) + (1 + l_TF - l_2) + (1 + l_TF - l_3)
-#         #     loss_t += model_loss(h_t, h_t_aug).item()
-#         #     loss_f += model_loss(h_f, h_f_aug).item()
-
-#         fea_concat = torch.cat((z_t, z_f), dim=1)
-#         encoded.append(fea_concat)
-
-#     # Run through classifier
-#     encoded = torch.stack(encoded, dim=1)
-#     logits = classifier(encoded).squeeze(-1)  # Run trhough transformer model
-#     # predictor loss, actually, here is training loss
-#     loss = class_loss(logits, labels.to(device))
-
-#     # Final loss taking into account all portions
-#     # loss_c /= seqs.size(1)
-#     # loss_t /= seqs.size(1)
-#     # loss_f /= seqs.size(1)
-#     # loss = loss_p + (1-lam) * loss_c + lam * (loss_t + loss_f)
-
-#     predictions = (torch.sigmoid(logits) > threshold).int()
-
-#     return loss, encoded, predictions
-
-# def nvidia_info():
-#     nvidia_smi.nvmlInit()
-
-#     deviceCount = nvidia_smi.nvmlDeviceGetCount()
-#     for i in range(deviceCount):
-#         handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
-#         info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
-#         print("Device {}: {}, Memory : ({:.2f}% free): {}(total), {} (free), {} (used)".format(i, nvidia_smi.nvmlDeviceGetName(handle), 100*info.free/info.total, info.total, info.free, info.used))
-
-#     nvidia_smi.nvmlShutdown()
