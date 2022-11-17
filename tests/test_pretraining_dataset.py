@@ -51,7 +51,7 @@ class TestPretrainingDataset(unittest.TestCase):
 
         sampled = counter / sum(counter)
         for (samp, expected) in zip(sampled.tolist(), pre_dataset.mask_probs.tolist()):
-            self.assertAlmostEqual(samp, expected, places=2)
+            self.assertAlmostEqual(samp, expected, places=1)
 
     def tearDown(self):
         pass

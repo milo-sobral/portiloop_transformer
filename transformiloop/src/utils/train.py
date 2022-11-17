@@ -11,7 +11,7 @@ import torch.optim as optim
 import wandb
 from torch.nn import BCEWithLogitsLoss
 from torchinfo import summary
-from transformiloop.src.data.spindle_detect_data import get_dataloaders
+from transformiloop.src.data.spindle_detection import get_dataloaders
 from transformiloop.src.models.transformers import ClassificationTransformer
 from transformiloop.src.utils.configs import initialize_config, validate_config
 

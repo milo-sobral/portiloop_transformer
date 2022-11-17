@@ -49,6 +49,7 @@ class TransformiloopPretrain(nn.Module):
 
         # Add learnable masking token
         if mask is not None:
+            mask = mask.unsqueeze(-1).expand(mask.size(0), mask.size(1), x.size(-1))
             x = torch.where(mask != 2, x, self.mask_token)
 
         # Run through transformer
@@ -68,7 +69,7 @@ class TransformiloopPretrain(nn.Module):
             return gender, age, None
         else:
             # Get the reconstructions for windows that have been masked
-            seq_reconstructions = [self.sequence_reconstruction(x[:, i]) for i, n in enumerate(mask) if n != 0]
+            seq_reconstructions = self.sequence_reconstruction(x[:, 1:])
             return None, None, seq_reconstructions
 
     def get_models(self):
