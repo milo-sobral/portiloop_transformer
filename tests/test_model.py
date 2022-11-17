@@ -59,16 +59,8 @@ class TestModels(unittest.TestCase):
                 in_seq = torch.rand((config['batch_size'], config['seq_len'], config['window_size']))
                 in_hist = torch.rand((config['batch_size'], config['seq_len']-1)) if config['full_transformer'] else None
                 output = classifier(in_seq, in_hist)
-                # summary(
-                #     classifier,
-                #     input_size=[
-                #         (config['batch_size'], config['seq_len'], config['window_size']),
-                #         (config['batch_size'], config['seq_len']-1)
-                #     ],
-                #     dtypes=[torch.float, torch.float, torch.float],
-                #     depth=3,
-                #     verbose=0
-                # )
+                self.assertEqual(output.shape, torch.Size([self.config['batch_size'], 1]))
+
             except Exception as e:
                 pp = pprint.PrettyPrinter(indent=4)
                 pp.pprint(config)
@@ -90,9 +82,15 @@ class TestModels(unittest.TestCase):
                 in_seq = torch.rand((config['batch_size'], config['seq_len'], config['window_size']))
                 in_hist = torch.rand((config['batch_size'], config['seq_len']-1)) if config['full_transformer'] else None
                 in_mask = torch.rand((config['batch_size'], config['seq_len']))
-                out_1, out_2, out_3 = pretrainer(in_seq, in_hist, in_mask)
-                out_1, out_2, out_3 = pretrainer(in_seq, in_hist, None) 
+                _, _, out_3 = pretrainer(in_seq, in_hist, in_mask)
+                out_1, out_2, _ = pretrainer(in_seq, in_hist, None)
 
+                self.assertEqual(out_1.shape, torch.Size([self.config['batch_size'], 1]))
+                self.assertEqual(out_2.shape, torch.Size([self.config['batch_size'], 1]))
+                # If we are testing full transformer, then the masked language modeling does not make sense
+                if not config['full_transformer']:
+                    self.assertEqual(out_3.shape, torch.Size([self.config['batch_size'], self.config['seq_len'], self.config['reconstruction_dim']]))
+                
             except Exception as e:
                 pp = pprint.PrettyPrinter(indent=4)
                 pp.pprint(config)

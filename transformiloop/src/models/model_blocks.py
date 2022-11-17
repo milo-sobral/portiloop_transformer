@@ -125,7 +125,7 @@ class Transformer(nn.Module):
             history = history.unsqueeze(-1).expand(history.size(0), history.size(1), self.config['embedding_size'])
             history = self.positional_encoder(history)
             x = self.transformer_decoder(history, x)
-    
+
         return x
 
 

@@ -69,7 +69,9 @@ class TransformiloopPretrain(nn.Module):
             return gender, age, None
         else:
             # Get the reconstructions for windows that have been masked
-            seq_reconstructions = self.sequence_reconstruction(x[:, 1:])
+            if not self.config['full_transformer']:
+                x = x[:, 1:]
+            seq_reconstructions = self.sequence_reconstruction(x)
             return None, None, seq_reconstructions
 
     def get_models(self):
