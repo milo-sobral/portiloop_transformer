@@ -63,7 +63,7 @@ def pretrain(config, wandb_group, wandb_project):
     )
 
     # Set up a new WandB run
-    exp_name = f"A smart way to create a name from the config"
+    exp_name = f"DEBUG_EXPERIMENT"
     os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
     wandb_run = wandb.init(
         project=wandb_project,
@@ -324,5 +324,7 @@ if __name__ == "__main__":
     unique_name = True
     pretrain = False
     finetune_encoder = True
-
-    run(config, 'experiment_clstoken_smallerlr', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
+    wandb_group = "Milo-DEBUG"
+    wandb_project = "Portiloop"
+    # run(config, 'experiment_clstoken_smallerlr', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
+    pretrain(config, wandb_group, wandb_project)
