@@ -12,12 +12,10 @@ def generate_dataset(MASS_directory, output_directory, subset_format='SS{}_EDF',
     Note that the names of the folders of each subset must be in the format 'SS{subset number}_EDF'.
     We also assume that the subject IDs are the first ten characters of each filename.
     """
-    # Create the output directory if it does not exist
-    Path(output_directory).mkdir(parents=True, exist_ok=True)
 
     # Collect all subset directories
     subsets_dir_names = [subset_format.format(i) for i in range(1, 6)]
-    ss_dirs = [dir for dir in os.listdir(MASS_directory) if dir in subsets_dir_names]
+    ss_dirs = [os.path.join(MASS_directory, dir) for dir in os.listdir(MASS_directory) if dir in subsets_dir_names]
 
     # Collect all desired filenames in those directories
     subject_filenames = extract_dataset_filenames(ss_dirs)
@@ -30,6 +28,7 @@ def generate_dataset(MASS_directory, output_directory, subset_format='SS{}_EDF',
     for filename in subject_filenames:
         # Get subject ID and check if we must rereference
         subject_id = os.path.basename(filename)[:10]
+        reref = None
         try:
             reref = ref_dict[subject_id][0] == 'C3-A2'
         except KeyError:
@@ -48,6 +47,7 @@ def generate_dataset(MASS_directory, output_directory, subset_format='SS{}_EDF',
                 signals = [resample_signal(signal) for signal in signals]
 
             # Write to a new EDF file
+            print(f"Writing new edf file {out_file}")
             write_edf_quick(out_file, signals, fe_out)
 
 
@@ -109,3 +109,9 @@ def readEDF(filename, prim_channels, ref_channel=None):
         print("File " + filename + " ignored because of corruption")
 
     return signals
+
+if __name__ == '__main__':
+    MASS_directory = os.path.abspath("/project/MASS")
+    output_directory = os.path.abspath('transformiloop/dataset/MASS_preds')
+    generate_dataset(MASS_directory=MASS_directory, output_directory=output_directory)
+

@@ -38,12 +38,9 @@ class TestTraining(unittest.TestCase):
             torch.randint(low=0, high=3, size=(self.config['batch_size'], self.config['seq_len'])),
             torch.rand((self.config['batch_size'], self.config['seq_len'], self.config['window_size']))
         )
-
         loss, losses, predictions = run_pretrain_batch(batch, model, losses)
-
         loss.backward()
         
-
     def tearDown(self):
         pass
 

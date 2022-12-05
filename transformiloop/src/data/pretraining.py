@@ -1,8 +1,9 @@
 from copy import deepcopy
 import os
 import csv
+import random
 import pyedflib
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Sampler
 import numpy as np
 import torch
 
@@ -134,7 +135,6 @@ class PretrainingDataset(Dataset):
         # Get random mask from given probabilities:
         mask = torch.searchsorted(self.mask_cum_probs, torch.rand(self.seq_len))
 
-
         # Get the sequence for masked sequence modeling
         masked_seq = deepcopy(x_data)
         for seq_idx, mask_token in enumerate(mask):
@@ -149,3 +149,16 @@ class PretrainingDataset(Dataset):
                 raise RuntimeError("Issue with masks, shouldn't get a value not in {0, 1, 2, 3}")
 
         return x_data, x_gender, x_age, mask, masked_seq
+
+class ValidationSampler(Sampler):
+    def __init__(self, data_source, dividing_factor):
+        self.len_max = len(data_source)
+        self.data = data_source
+        self.dividing_factor = dividing_factor
+
+    def __iter__(self):
+        for idx in range(0, self.len_max, self.dividing_factor):
+            yield random.randint(0, self.len_max - 1)
+
+    def __len__(self):
+        return self.len_max // self.dividing_factor
