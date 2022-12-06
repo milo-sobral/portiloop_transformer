@@ -29,11 +29,11 @@ def seq_rec_loss(predictions, expected, mask, loss):
     return loss(predictions * mask, expected * mask)
     
 
-def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger):
+def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger, length=-1):
     model.train()
 
     mse_loss = nn.MSELoss()
-    losses = {
+    loss_fns = {
         'gender': nn.BCEWithLogitsLoss(),
         'age': mse_loss,
         'seq_rec': (lambda pred, exp, mask: seq_rec_loss(pred, exp, mask, mse_loss))
@@ -51,32 +51,37 @@ def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger):
     for batch_idx, batch in enumerate(dataloader):
         optim.zero_grad()
 
+        # Stop after a certain number of batches
+        if length > 0 and batch_idx > length:
+            break
+
         if batch_idx % config['log_every'] == 0:
             logging.debug(f"Training batch {batch_idx}")
 
         # run through model
-        loss, losses, _ = run_pretrain_batch(batch, model, losses)
+        loss, losses, _ = run_pretrain_batch(batch, model, loss_fns, config['device'])
         
         # Update model parameters and step scheduler
-        loss.backwards()
+        loss.backward()
         optim.step()
         scheduler.step()
 
         # Keep track of the losses
         with torch.no_grad():
-            averages['combined'] += loss.item().detach().cpu()
-            averages['age'] += losses[0].item().detach().cpu()
-            averages['gender'] += losses[1].item().detach().cpu()
-            averages['seq_rec'] += losses[2].item().detach().cpu()
+            averages['combined'] += loss.cpu().item()
+            averages['age'] += losses[0].cpu().item()
+            averages['gender'] += losses[1].cpu().item()
+            averages['seq_rec'] += losses[2].cpu().item()
         max_batch_idx = batch_idx
 
         # Log the progress with wandb
-        if batch_idx % config['log_every'] == 0:
+        if batch_idx % config['log_every'] == 0 and wandblogger is not None:
             wandblogger.log({
-                'combined_loss': averages['combined'] / float(batch_idx),
-                'age_loss': averages['age'] / float(batch_idx),
-                'gender_loss': averages['gender'] / float(batch_idx),
-                'seq_rec_loss': averages['seq_rec'] / float(batch_idx),
+                'batch': batch_idx,
+                'combined_loss': averages['combined'] / float(batch_idx + 1),
+                'age_loss': averages['age'] / float(batch_idx + 1),
+                'gender_loss': averages['gender'] / float(batch_idx + 1),
+                'seq_rec_loss': averages['seq_rec'] / float(batch_idx + 1),
                 'learning_rate': float(optim.param_groups[0]['lr'])
             })
         
@@ -93,17 +98,24 @@ def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger):
     return averages
 
 
-def run_pretrain_batch(batch, model, losses):
+def run_pretrain_batch(batch, model, losses, device):
     # Extract batch info
     signal, gender_y, age_y, mask, masked_seq = batch
+
+    # Send tensors to device
+    signal = signal.to(device)
+    masked_seq = masked_seq.to(device)
+    mask = mask.to(device)
+    gender_y = gender_y.to(device)
+    age_y = age_y.to(device)
 
     # Run model masked and unmasked to get all results
     gender_pred, age_pred, _ = model(signal, None, None)
     _, _, seq_rec_pred = model(masked_seq, None, mask)
 
     # Get all the losses from all results for each task
-    loss_gender = losses['gender'](gender_pred, gender_y.float())
-    loss_age = losses['age'](age_pred, age_y.float())
+    loss_gender = losses['gender'](gender_pred.squeeze(), gender_y.float())
+    loss_age = losses['age'](age_pred.squeeze(), age_y.float())
     loss_seq_rec = losses['seq_rec'](seq_rec_pred, signal, mask)
 
     # Combine all losses by simply averaging

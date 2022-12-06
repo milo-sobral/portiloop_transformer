@@ -68,10 +68,10 @@ DEFAULT_CONFIG = {
     # Training params
     'max_duration': int(71.5 * 3600),
     'threshold': 0.5, 
-    'lr': 2e-4,
+    'lr': 1e-4,
     'betas': (0.9, 0.99),
     'clip': 0.5,
-    'warmup_steps': 250000,
+    'warmup_steps': 10000,
     'lr_decay': 0.99999,
     'log_every': 50,
     'dropout': 0.0,
@@ -87,6 +87,7 @@ DEFAULT_CONFIG = {
     'num_datapoints': 100000,
     'es_delta': 0.01,
     'reconstruction_dim': 64,
+    'epoch_length': 100,
 
     # Masking params
     'ratio_masked': 0.5,

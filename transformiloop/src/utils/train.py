@@ -8,6 +8,8 @@ import pathlib
 from torch.utils.data import DataLoader
 
 import torch
+from torch.utils.data.sampler import RandomSampler
+
 import torch.optim as optim
 import wandb
 from torch.nn import BCEWithLogitsLoss
@@ -22,30 +24,39 @@ from transformiloop.src.utils.train_utils import (finetune_epoch,
                                                   WarmupTransformerLR, pretrain_epoch)
 
 
-def pretrain(config, wandb_group, wandb_project):
+def pretrain(config, wandb_group, wandb_project, log_wandb=True):
+
+    logging.debug("Initializing pretraining...")
 
     # Basic initial setup
     time_start = time.time()
     config['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    logging.debug(f"Using device {config['device']}")
+
     # Set up all the dataset and model path
     home_path = pathlib.Path(__file__).parents[2].resolve()
-    dataset_path = home_path / 'dataset' / 'pre_ds'
+    dataset_path = home_path / 'dataset' / 'test_ds'
     models_path = home_path / 'models'
     models_path.mkdir(exist_ok=True)
     
     # Initialize the model
-    model = TransformiloopPretrain(config)
+    model = TransformiloopPretrain(config).to(config['device'])
+
+    logging.debug("Initializing dataset...")
 
     # Initialize the pretraining dataloader
     pre_dataset = PretrainingDataset(dataset_path, config)
+    sampler = RandomSampler(data_source=pre_dataset, replacement=True)
     pretrain_dl = DataLoader(
         pre_dataset, 
         batch_size=config['batch_size'],
-        shuffle=True,
+        sampler=sampler,
         pin_memory=True,
         drop_last=True
     )
+
+    logging.debug("Done initializing dataloader")
 
     # Initialize the pretraining optimizer
     optimizer = optim.AdamW(
@@ -56,36 +67,43 @@ def pretrain(config, wandb_group, wandb_project):
 
     # Initialize the Learning rate scheduler
     scheduler = WarmupTransformerLR(
-        config["classifier_optimizer"],
+        optimizer,
         config['warmup_steps'],
         config['lr'],
         config['lr_decay']
     )
 
     # Set up a new WandB run
-    exp_name = f"DEBUG_EXPERIMENT"
-    os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
-    wandb_run = wandb.init(
-        project=wandb_project,
-        id=exp_name,
-        resume='allow',
-        config=config,
-        reinit=True,
-        group=wandb_group,
-        save_code=True)
+    exp_name = f"DEBUG_EXPERIMENT_2"
+
+    if log_wandb:
+        os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
+        wandb_run = wandb.init(
+            project=wandb_project,
+            id=exp_name,
+            resume='allow',
+            config=config,
+            reinit=True,
+            group=wandb_group,
+            save_code=True)
+    else:
+        wandb_run = None
 
     for epoch in range(config['epochs']):
         try:
+            logging.debug(f"Starting epoch {epoch}")
             pretrain_epoch(
                 pretrain_dl, 
                 config, 
                 model, 
                 optimizer,
                 scheduler, 
-                wandb_run
+                wandb_run,
+                config['epoch_length']
             )
         except Exception as e:
-            wandb_run.finish()
+            if wandb_run:
+                wandb_run.finish()
             print(f"Pretraining stopped due to an exception during epoch {epoch}...")
             raise e
 
@@ -322,9 +340,10 @@ if __name__ == "__main__":
         raise AttributeError("Issue with config.")
     save_model = False
     unique_name = True
-    pretrain = False
+    # pretrain = False
     finetune_encoder = True
     wandb_group = "Milo-DEBUG"
     wandb_project = "Portiloop"
+    log_wandb = True
     # run(config, 'experiment_clstoken_smallerlr', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
-    pretrain(config, wandb_group, wandb_project)
+    pretrain(config, wandb_group, wandb_project, log_wandb)

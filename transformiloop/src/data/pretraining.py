@@ -136,7 +136,7 @@ class PretrainingDataset(Dataset):
         mask = torch.searchsorted(self.mask_cum_probs, torch.rand(self.seq_len))
 
         # Get the sequence for masked sequence modeling
-        masked_seq = deepcopy(x_data)
+        masked_seq = x_data.clone()
         for seq_idx, mask_token in enumerate(mask):
             # No mask or skip mask or MASK token (which is done later)
             if mask_token in [0, 1, 3]: 
