@@ -24,24 +24,52 @@ from transformiloop.src.utils.train_utils import (finetune_epoch,
                                                   WarmupTransformerLR, pretrain_epoch)
 
 
-def pretrain(config, wandb_group, wandb_project, log_wandb=True):
+def pretrain(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=False):
 
+    # Initialize the config depending on the case
+    if log_wandb:
+        # Initialize WandB logging
+        os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
+        wandb_run = wandb.init(
+            project=wandb_project,
+            group=wandb_group,
+            id=wandb_exp_id,
+            resume='allow',
+            reinit=True,
+            save_code=True)
+
+        # Load the config
+        if restore:
+            config = wandb_run.config
+            model_weights_filename = \
+                f"model_{wandb_run.summary['batch'] // config['save_every'] * config['save_every']}.ckpt"
+            restore_dict = torch.load(wandb_run.restore(model_weights_filename, run_path=wandb_run.path).name)
+
+            logging.debug(f"Restoring model from {model_weights_filename}")
+        else:
+            config = initialize_config('test')
+            if not validate_config(config):
+                raise AttributeError("Issue with config.")
+            wandb_run.config.update(config)
+    else:
+        # Load the config
+        config = initialize_config('test')
+        if not validate_config(config):
+            raise AttributeError("Issue with config.")
+        if restore:
+            raise AttributeError("Cannot restore without WandB.")
+        wandb_run = None
+        
     logging.debug("Initializing pretraining...")
 
     # Basic initial setup
-    time_start = time.time()
     config['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     logging.debug(f"Using device {config['device']}")
 
     # Set up all the dataset and model path
     home_path = pathlib.Path(__file__).parents[2].resolve()
-    dataset_path = home_path / 'dataset' / 'test_ds'
-    models_path = home_path / 'models'
-    models_path.mkdir(exist_ok=True)
-    
-    # Initialize the model
-    model = TransformiloopPretrain(config).to(config['device'])
+    dataset_path = home_path / 'dataset' / 'MASS_preds'
 
     logging.debug("Initializing dataset...")
 
@@ -58,12 +86,23 @@ def pretrain(config, wandb_group, wandb_project, log_wandb=True):
 
     logging.debug("Done initializing dataloader")
 
+    # Initialize the model
+    model = TransformiloopPretrain(config)
+    if restore:
+        model_state_dict = restore_dict['model']
+        model_state_dict = {k: v for k, v in model_state_dict.items() if "transformer.positional_encoder.pos_encoder.pe" != k}
+        # Get the latest model weights filename, the highest multiple of save_every which is less than the last batch
+        model.load_state_dict(model_state_dict)
+    model.to(config['device'])
+
     # Initialize the pretraining optimizer
     optimizer = optim.AdamW(
         model.parameters(),
         lr=config["lr"],
         betas=config["betas"]
     )
+    if restore:
+        optimizer.load_state_dict(restore_dict['optimizer'])
 
     # Initialize the Learning rate scheduler
     scheduler = WarmupTransformerLR(
@@ -72,22 +111,8 @@ def pretrain(config, wandb_group, wandb_project, log_wandb=True):
         config['lr'],
         config['lr_decay']
     )
-
-    # Set up a new WandB run
-    exp_name = f"DEBUG_EXPERIMENT_2"
-
-    if log_wandb:
-        os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
-        wandb_run = wandb.init(
-            project=wandb_project,
-            id=exp_name,
-            resume='allow',
-            config=config,
-            reinit=True,
-            group=wandb_group,
-            save_code=True)
-    else:
-        wandb_run = None
+    if restore:
+        scheduler.load_state_dict(restore_dict['scheduler'])
 
     for epoch in range(config['epochs']):
         try:
@@ -99,7 +124,8 @@ def pretrain(config, wandb_group, wandb_project, log_wandb=True):
                 optimizer,
                 scheduler, 
                 wandb_run,
-                config['epoch_length']
+                length=config['epoch_length'],
+                last_batch=restore_dict['batch'] if restore else 0
             )
         except Exception as e:
             if wandb_run:
@@ -334,16 +360,19 @@ class WandBLogger:
                                root=self.dataset_path)
 
 if __name__ == "__main__":
-    
-    config = initialize_config('test')
-    if not validate_config(config):
-        raise AttributeError("Issue with config.")
     save_model = False
     unique_name = True
     # pretrain = False
     finetune_encoder = True
-    wandb_group = "Milo-DEBUG"
+    wandb_group = "Transformer_Pretraining"
     wandb_project = "Portiloop"
     log_wandb = True
+    restore = False
+    # Set up a new WandB run with the time in nanoseconds as the name
+    if restore:
+        exp_name = "DEBUG_EXPERIMENT_1671141893367309045"
+    else:
+        # exp_name = f"DEBUG_EXPERIMENT_{int(time.time_ns())}"
+        exp_name = "EXPERIMENT_1_Pretraining"
     # run(config, 'experiment_clstoken_smallerlr', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
-    pretrain(config, wandb_group, wandb_project, log_wandb)
+    pretrain(wandb_group, wandb_project, exp_name, log_wandb, restore)

@@ -10,17 +10,34 @@ import wandb
 from torch.optim.lr_scheduler import _LRScheduler
 from copy import deepcopy
 
-def save_model(save_path, model, config):
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-    not_saveable_keys = ['device', 'optimizer',
-                         'scheduler', 'loss_func', 'classifier_optimizer']
-    saveable_config = {key: val for (
-        key, val) in config.items() if key not in not_saveable_keys}
-    print(saveable_config)
-    with open(os.path.join(save_path, 'config.json'), 'w') as f:
-        json.dump(saveable_config, f)
-    torch.save(model.state_dict(), os.path.join(save_path, "model"))
+
+def save_model(model, optimizer, scheduler, batch_idx, exp_name):
+    """
+    Saves the model and config to a temporary directory and then uploads it to wandb.
+    """
+
+    logging.debug(f"Saving model at batch {batch_idx}")
+
+    # Create a temporary directory to save the model and config from path where script is running
+    temp_path = os.path.join(f"transformiloop/models/", exp_name)
+
+    # Create the temporary directory
+    if not os.path.exists(temp_path):
+        os.system('mkdir -p ' + temp_path)
+        
+    # Save the model and config to the temporary directory
+    model_state_dict = model.state_dict()
+    model_state_dict = {k: v for k, v in model_state_dict.items() if "transformer.positional_encoder.pos_encoder.pe" != k}
+    to_save = {
+        'model': model_state_dict,
+        'optimizer': optimizer.state_dict(),
+        'scheduler': scheduler.state_dict(),
+        'batch': batch_idx,
+    }
+    torch.save(to_save, os.path.join(temp_path, f"model_{batch_idx}.ckpt"))
+
+    # Upload the model and config to wandb
+    wandb.save(temp_path + '/*', base_path=temp_path)
 
 
 def seq_rec_loss(predictions, expected, mask, loss):
@@ -29,7 +46,7 @@ def seq_rec_loss(predictions, expected, mask, loss):
     return loss(predictions * mask, expected * mask)
     
 
-def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger, length=-1):
+def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger, length=-1, last_batch=0):
     model.train()
 
     mse_loss = nn.MSELoss()
@@ -39,17 +56,11 @@ def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger, len
         'seq_rec': (lambda pred, exp, mask: seq_rec_loss(pred, exp, mask, mse_loss))
     }
 
-    averages = {
-        'combined': 0,
-        'gender': 0,
-        'age': 0,
-        'seq_rec': 0
-    }
-
-    # Run through dataset
-    max_batch_idx = 0
     for batch_idx, batch in enumerate(dataloader):
         optim.zero_grad()
+
+        # Skip batches that have already been trained
+        batch_idx += last_batch
 
         # Stop after a certain number of batches
         if length > 0 and batch_idx > length:
@@ -66,36 +77,20 @@ def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger, len
         optim.step()
         scheduler.step()
 
-        # Keep track of the losses
-        with torch.no_grad():
-            averages['combined'] += loss.cpu().item()
-            averages['age'] += losses[0].cpu().item()
-            averages['gender'] += losses[1].cpu().item()
-            averages['seq_rec'] += losses[2].cpu().item()
-        max_batch_idx = batch_idx
-
         # Log the progress with wandb
         if batch_idx % config['log_every'] == 0 and wandblogger is not None:
             wandblogger.log({
                 'batch': batch_idx,
-                'combined_loss': averages['combined'] / float(batch_idx + 1),
-                'age_loss': averages['age'] / float(batch_idx + 1),
-                'gender_loss': averages['gender'] / float(batch_idx + 1),
-                'seq_rec_loss': averages['seq_rec'] / float(batch_idx + 1),
+                'combined_loss': loss.cpu().item(),
+                'age_loss': losses[0].cpu().item(),
+                'gender_loss': losses[1].cpu().item(),
+                'seq_rec_loss': losses[2].cpu().item(),
                 'learning_rate': float(optim.param_groups[0]['lr'])
             })
         
-        # Check if we are better than model and save model to wandb if we are
-        # TODO : 
-        #   - Check if we are better than the best model so far
-        #   - Save model weights to disk
-        #   - Copy model weights to wandb
-
-    # Compute the average of all the losses for all the batches in our training
-    for key in averages.keys():
-        averages[key] / max_batch_idx
-    
-    return averages
+        # Save the model
+        if batch_idx % config['save_every'] == 0 and batch_idx > 0 and wandblogger is not None:
+            save_model(model, optim, scheduler, batch_idx, wandblogger.id)
 
 
 def run_pretrain_batch(batch, model, losses, device):
@@ -119,12 +114,11 @@ def run_pretrain_batch(batch, model, losses, device):
     loss_seq_rec = losses['seq_rec'](seq_rec_pred, signal, mask)
 
     # Combine all losses by simply averaging
-    loss = (loss_age + loss_gender + loss_seq_rec) / 3.0
+    loss = (loss_age + loss_gender * 100.0 + loss_seq_rec) / 3.0
 
     # Returns losses and predictions
     return loss, [loss_age, loss_gender, loss_seq_rec], [gender_pred, age_pred, seq_rec_pred]
     
-
 
 def finetune_epoch(dataloader, config, device, classifier, classifier_optim, scheduler):
     classifier.train()

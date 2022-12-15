@@ -18,7 +18,7 @@ def initialize_config(name):
 
 DEFAULT_CONFIG = {
     # Data params
-    'batch_size' : 32,
+    'batch_size' : 200,
     'seq_len': 64,
     'window_size': 64,
     'seq_stride': 64,
@@ -68,12 +68,13 @@ DEFAULT_CONFIG = {
     # Training params
     'max_duration': int(71.5 * 3600),
     'threshold': 0.5, 
-    'lr': 1e-4,
+    'lr': 1e-3,
     'betas': (0.9, 0.99),
     'clip': 0.5,
     'warmup_steps': 10000,
-    'lr_decay': 0.99999,
-    'log_every': 50,
+    'lr_decay': 0.999999,
+    'log_every': 100,
+    'save_every': 10000,
     'dropout': 0.0,
     'epochs': 4000,
     'epochs_pretrain': 30,
@@ -87,7 +88,7 @@ DEFAULT_CONFIG = {
     'num_datapoints': 100000,
     'es_delta': 0.01,
     'reconstruction_dim': 64,
-    'epoch_length': 100,
+    'epoch_length': -1,
 
     # Masking params
     'ratio_masked': 0.5,
