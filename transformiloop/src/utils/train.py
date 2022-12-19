@@ -1,3 +1,4 @@
+import argparse
 import copy
 import logging
 import os
@@ -134,7 +135,82 @@ def pretrain(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
             raise e
 
 
-def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, finetune_encoder, initial_validation=True):
+def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=False, pretrained_model=None):
+
+    if pretrained_model is not None:
+        if restore:
+            raise AttributeError("Cannot restore and use a pretrained model. Either restore and already started finetuning run, or start a new finetuning run from a pretrained model.")
+        api = wandb.Api()
+        run = api.run(pretrained_model['run_path'])
+        config = run.config
+        model_dict = torch.load(\
+                wandb.restore(pretrained_model['model_name'], run_path=pretrained_model['run_path']).name)
+        # Initialize the model
+        model = TransformiloopPretrain(config)
+        model_state_dict = model_dict['model']
+        model_state_dict = {k: v for k, v in model_state_dict.items() if "transformer.positional_encoder.pos_encoder.pe" != k}
+        # Get the latest model weights filename, the highest multiple of save_every which is less than the last batch
+        model.load_state_dict(model_state_dict)
+        model.to(config['device'])
+        
+        # Initialize the model with the pretrained weights
+        cnn_encoder, transformer = model.get_models()
+        model = TransformiloopFinetune(config, cnn_encoder, transformer)
+        
+        if log_wandb:
+            # Initialize WandB logging
+            os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
+            wandb_run = wandb.init(
+                project=wandb_project,
+                group=wandb_group,
+                id=wandb_exp_id,
+                resume='allow',
+                reinit=True,
+                save_code=True)
+
+        if not validate_config(config):
+            raise AttributeError("Issue with config.")
+
+        if log_wandb:
+            wandb_run.config.update(config)
+        else:
+            wandb_run = None
+    else:
+        # Initialize the config depending on the case
+        if log_wandb:
+            # Initialize WandB logging
+            os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
+            wandb_run = wandb.init(
+                project=wandb_project,
+                group=wandb_group,
+                id=wandb_exp_id,
+                resume='allow',
+                reinit=True,
+                save_code=True)
+
+            # Load the config
+            if restore:
+                config = wandb_run.config
+                model_weights_filename = \
+                    f"model_{wandb_run.summary['batch'] // config['save_every'] * config['save_every']}.ckpt"
+                model_dict = torch.load(wandb_run.restore(model_weights_filename, run_path=wandb_run.path).name)
+
+                logging.debug(f"Restoring model from {model_weights_filename}")
+            else:
+                config = initialize_config('test')
+                if not validate_config(config):
+                    raise AttributeError("Issue with config.")
+                wandb_run.config.update(config)
+        else:
+            # Load the config
+            config = initialize_config('test')
+            if not validate_config(config):
+                raise AttributeError("Issue with config.")
+            if restore:
+                raise AttributeError("Cannot restore without WandB.")
+            wandb_run = None
+
+def run(config, wandb_group, wandb_project, save_model, unique_name, initial_validation=True):
 
     time_start = time.time()
 
@@ -310,69 +386,45 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, pretrain, f
     return best_model_loss_validation, best_model_f1_score_validation, best_epoch_early_stopping
 
 
-class WandBLogger:
-    def __init__(self, group_name, config, project_name, experiment_name, dataset_path):
-        self.best_model = None
-        self.experiment_name = experiment_name
-        self.config = config
-        self.dataset_path = dataset_path
-        os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
-        self.wandb_run = wandb.init(
-            project=project_name,
-            id=experiment_name,
-            resume='allow',
-            config=config,
-            reinit=True,
-            group=group_name,
-            save_code=True)
-
-    def log(self, loggable_dict):
-        self.wandb_run.log(loggable_dict)
-
-    def update_summary(
-        self,
-        best_epoch,
-        best_f1_score,
-        best_precision,
-        best_recall,
-        best_loss,
-        best_accuracy
-    ):
-        self.wandb_run.summary['best_epoch'] = best_epoch
-        self.wandb_run.summary['best_f1_score'] = best_f1_score
-        self.wandb_run.summary['best_precision'] = best_precision
-        self.wandb_run.summary['best_recall'] = best_recall
-        self.wandb_run.summary['best_loss'] = best_loss
-        self.wandb_run.summary['best_accuracy'] = best_accuracy
-
-    def update_best_model(self):
-        self.wandb_run.save(os.path.join(
-            self.dataset_path,
-            self.experiment_name),
-            policy="live",
-            base_path=self.dataset_path)
-
-    def __del__(self):
-        self.wandb_run.finish()
-
-    def restore(self):
-        self.wandb_run.restore(self.experiment_name,
-                               root=self.dataset_path)
-
 if __name__ == "__main__":
-    save_model = False
-    unique_name = True
-    # pretrain = False
-    finetune_encoder = True
-    wandb_group = "Transformer_Pretraining"
-    wandb_project = "Portiloop"
-    log_wandb = True
-    restore = False
-    # Set up a new WandB run with the time in nanoseconds as the name
-    if restore:
-        exp_name = "DEBUG_EXPERIMENT_1671141893367309045"
+    # Parse arguments
+    parser = argparse.ArgumentParser()
+
+    # Mutually exclusive group of arguments
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-f', '--finetune', action='store_true', help='Finetune the model on the spindle dataset')
+    group.add_argument('-p', '--pretrain', action='store_true', help='Pretrain the model on the MASS dataset')
+
+    # Restore a run that exists
+    parser.add_argument('-r', '--restore', action='store_true', default=False, help='Restore a run that exists. If that option is selected, make sure to provide a run name')
+
+    # Configuration file
+    parser.add_argument('--config', type=str, default=None, help='Path to the configuration file. If none is provided, the default configuration will be used')
+
+    # WandB logging arguments
+    parser.add_argument('-l', '--log_wandb', action='store_true', default=False, help='Log the run to WandB')
+    parser.add_argument('-e', '--experiment_name', type=str, default=f"DEFAULT_EXPERIMENT", help='Name of the experiment. If none is provided, a unique experiment name will be generated.')
+    parser.add_argument('-g', '--wandb_group', type=str, default='DEFAULT_GROUP', help='Name of the WandB group (default: DEFAULT_GROUP)')
+    parser.add_argument('--wandb_project', type=str, default='Portiloop', help='Name of the WandB project (default: Portiloop)')
+
+    args = parser.parse_args()
+    
+    # Check if the experiment name is valid
+    if args.restore and args.experiment_name == "DEFAULT_EXPERIMENT":
+        raise AttributeError("If you are restoring a run, you must provide a run name")
+
+    # If the experiment name is not provided, generate a unique name
+    if args.experiment_name == "DEFAULT_EXPERIMENT":
+        args.experiment_name = f"Experiment_{time.time_ns()}"
+
+    if args.finetune:
+        finetune()
+    elif args.pretrain:
+        pretrain(args.wandb_group, args.wandb_project, args.experiment_name, log_wandb=args.log_wandb, restore=args.restore)
     else:
-        # exp_name = f"DEBUG_EXPERIMENT_{int(time.time_ns())}"
-        exp_name = "EXPERIMENT_1_Pretraining"
+        raise AttributeError("Either pretrain or finetune must be selected")
+    
+    
+
     # run(config, 'experiment_clstoken_smallerlr', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
-    pretrain(wandb_group, wandb_project, exp_name, log_wandb, restore)
+    

@@ -339,3 +339,53 @@ class WarmupTransformerLR(_LRScheduler):
         else:
             return [(group['lr'] * self.decay) for group in self.optimizer.param_groups]
 
+
+class WandBLogger:
+    def __init__(self, group_name, config, project_name, experiment_name, dataset_path):
+        self.best_model = None
+        self.experiment_name = experiment_name
+        self.config = config
+        self.dataset_path = dataset_path
+        os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
+        self.wandb_run = wandb.init(
+            project=project_name,
+            id=experiment_name,
+            resume='allow',
+            config=config,
+            reinit=True,
+            group=group_name,
+            save_code=True)
+
+    def log(self, loggable_dict):
+        self.wandb_run.log(loggable_dict)
+
+    def update_summary(
+        self,
+        best_epoch,
+        best_f1_score,
+        best_precision,
+        best_recall,
+        best_loss,
+        best_accuracy
+    ):
+        self.wandb_run.summary['best_epoch'] = best_epoch
+        self.wandb_run.summary['best_f1_score'] = best_f1_score
+        self.wandb_run.summary['best_precision'] = best_precision
+        self.wandb_run.summary['best_recall'] = best_recall
+        self.wandb_run.summary['best_loss'] = best_loss
+        self.wandb_run.summary['best_accuracy'] = best_accuracy
+
+    def update_best_model(self):
+        self.wandb_run.save(os.path.join(
+            self.dataset_path,
+            self.experiment_name),
+            policy="live",
+            base_path=self.dataset_path)
+
+    def __del__(self):
+        self.wandb_run.finish()
+
+    def restore(self):
+        self.wandb_run.restore(self.experiment_name,
+                               root=self.dataset_path)
+
