@@ -84,7 +84,7 @@ class TransformiloopPretrain(nn.Module):
         
 
 class TransformiloopFinetune(nn.Module):
-    def __init__(self, config, cnn_encoder=None, transformer=None) -> None:
+    def __init__(self, config, cnn_encoder=None, transformer=None, freeze=False) -> None:
         super().__init__()
         self.config = config
         # CNN based encoder to encode the EEG sequences
@@ -99,14 +99,20 @@ class TransformiloopFinetune(nn.Module):
         else:            
             self.transformer = Transformer(config)
 
+        # Freeze the pretrained models
+        if freeze:
+            if self.cnn_encoder is not None:
+                for param in self.cnn_encoder.parameters():
+                    param.requires_grad = False
+            for param in self.transformer.parameters():
+                param.requires_grad = False
+
         # Classification head which performs classification 
         self.classifier = nn.Sequential(
-            nn.Linear(config['d_model'], config['hidden_mlp']),
-            nn.Tanh(),
-            nn.Linear(config['hidden_mlp'], 1)
+            nn.Linear(config['d_model'], 1)
         )
     
-    def forward(self, x):
+    def forward(self, x, history):
         batch_dim = x.size(0)
         seq_dim = x.size(1)
 
@@ -123,7 +129,7 @@ class TransformiloopFinetune(nn.Module):
             x = A * B.unsqueeze(-1)  
 
         # Run through transformer
-        x = self.transformer(x, None)
+        x = self.transformer(x, history)
 
         # Go through classifier
         if self.config['use_last']:

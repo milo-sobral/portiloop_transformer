@@ -120,7 +120,7 @@ def run_pretrain_batch(batch, model, losses, device):
     return loss, [loss_age, loss_gender, loss_seq_rec], [gender_pred, age_pred, seq_rec_pred]
     
 
-def finetune_epoch(dataloader, config, device, classifier, classifier_optim, scheduler):
+def finetune_epoch(dataloader, config, device, classifier, classifier_optim, scheduler, wandb_run):
     classifier.train()
 
     total_loss = []
@@ -165,11 +165,22 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
     with torch.no_grad():
         acc, f1, recall, precision, cm = compute_metrics(torch.stack(
             all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
-    # print(f"Accuracy: {acc*100}\nF1-score: {f1*100}\nRecall: {recall*100}\nPrecision: {precision*100}")
+    
+    if wandb_run is not None:
+        wandb_run.log({
+            'train/loss': torch.tensor(total_loss).mean().cpu().item(),
+            'train/accuracy': acc,
+            'train/F1': f1,
+            'train/recall': recall,
+            'train/precision': precision,
+            'learning_rate': float(classifier_optim.param_groups[0]['lr']),
+            'gradient_plot': plot_gradients
+        })
+
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm, plot_gradients
 
 
-def finetune_test_epoch(dataloader, config, classifier, device):
+def finetune_test_epoch(dataloader, config, classifier, device, wandb_run):
     with torch.no_grad():
         
         classifier.eval()
@@ -206,6 +217,9 @@ def finetune_test_epoch(dataloader, config, classifier, device):
 
         acc, f1, recall, precision, cm = compute_metrics(torch.stack(
             all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+
+    if wandb_run is not None:
+        wandb_run.log({'val/accuracy': acc, 'val/F1': f1, 'val/recall': recall, 'val/precision': precision})
 
     return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
 

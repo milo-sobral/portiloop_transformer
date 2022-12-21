@@ -1,6 +1,7 @@
 wandb/*
 dataset/*
 *.ckpt
+*.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
