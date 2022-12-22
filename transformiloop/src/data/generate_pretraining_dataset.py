@@ -1,9 +1,69 @@
+import argparse
+import logging
 import numpy as np
 import pyedflib 
 import os
 from pathlib import Path
 from pyedflib.highlevel import write_edf_quick
 import pandas as pd
+
+
+
+def generate_sleep_staging_dataset(MASS_directory, output_directory, subset_format='SS{}_EDF'):
+    """
+    Generates a large CSV file containing all the sleep staging data available in the given MASS directory.
+    """
+    # Collect all subset directories
+    subsets_dir_names = [subset_format.format(i) for i in range(1, 6)]
+    ss_dirs = [os.path.join(MASS_directory, dir) for dir in os.listdir(MASS_directory) if dir in subsets_dir_names]
+
+    # Collect all desired filenames in those directories
+    subject_filenames = extract_dataset_filenames(ss_dirs, filename_contains="Base.edf")
+
+    # create empty dictionary
+    data = {}
+
+    # Extract info from the desired files
+    for filename in subject_filenames:
+        # Open edf file
+        with pyedflib.EdfReader(filename) as edf_file:
+            # Get the annotations
+            annotations = edf_file.readAnnotations()
+            assert len(annotations) == 3, "Annotations must be a tuple of (onsets, durations, labels)"
+
+            # extract the data for this subject
+            subject_id = os.path.basename(filename)[:10]
+            subject_data = extract_sleep_staging_data(annotations)
+
+            # add to dataframe
+            data[subject_id] = subject_data
+
+    # Save the data dictionary to json
+    df = pd.DataFrame.from_dict(data, orient='index')
+    df.to_csv(os.path.join(output_directory, "sleep_staging.csv"))
+
+
+def extract_sleep_staging_data(annotations):
+    """
+    Extracts the sleep staging data from the annotations of a single subject.
+    """
+    curr_index = 0
+    labels = []
+    for annotation in np.stack(annotations).T:
+        onset, duration, label = annotation
+        # Check if we have some empty space
+        onset = float(onset)
+        duration = float(duration)
+        if onset > curr_index:
+            # Add empty labels
+            if int(onset - curr_index) > 0:
+                logging.info(f"adding empty labels {int(onset - curr_index)}")
+                labels += ['?'] * int(onset - curr_index)
+        # Add the label
+        labels += [label.strip('Sleep stage ')] * int(duration)
+        curr_index = onset + duration
+
+    return np.array(labels)
 
 
 def generate_dataset(MASS_directory, output_directory, subset_format='SS{}_EDF', prim_channels=["C3"], ref_channel="A2", fe_in=256, fe_out=250):
@@ -110,8 +170,26 @@ def readEDF(filename, prim_channels, ref_channel=None):
 
     return signals
 
+
 if __name__ == '__main__':
+    # Parse inputs
+    parser = argparse.ArgumentParser()
+    # Mutually exclusive arguments
+    group = parser.add_mutually_exclusive_group(required=True)
+    # Create a boolean argument
+    group.add_argument('-r', '--pretraining', action='store_true', help='Generate the pretraining dataset.')
+    group.add_argument('-s', '--sleep_staging', action='store_true', help='Generate the Sleep Staging dataset.')
+    group.add_argument('-a', '--all', action='store_true', help='Generate all datasets.')
+    args = parser.parse_args()
+
     MASS_directory = os.path.abspath("/project/MASS")
     output_directory = os.path.abspath('transformiloop/dataset/MASS_preds')
-    generate_dataset(MASS_directory=MASS_directory, output_directory=output_directory)
+
+    if args.pretraining or args.all:
+        print("Generating pretraining dataset")
+        generate_dataset(MASS_directory=MASS_directory, output_directory=output_directory)
+    
+    if args.sleep_staging or args.all:
+        print("Generating sleep staging dataset")
+        generate_sleep_staging_dataset(MASS_directory=MASS_directory, output_directory='transformiloop/dataset/')
 
