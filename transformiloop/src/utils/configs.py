@@ -82,7 +82,7 @@ DEFAULT_CONFIG = {
     'lam': 0.2,
     'freeze_pretrained': True,
     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-    'lr_step_size': 10000,
+    'lr_step_size': 1000000,
     'lr_gamma': 0.5,
 
     # Pretraining data 
@@ -133,6 +133,18 @@ SAMPLEABLE_DICT = {
     'lr': [1e-6, 1e-5, 5e-6],
     'lam': [0.1, 0.7, 0.01]
 }
+
+
+def fill_config(config):
+    """
+    Takes an input config and fills in the missing values using the DEFAULT_CONFIG.
+    """
+    global DEFAULT_CONFIG
+    for key in DEFAULT_CONFIG:
+        if key not in config:
+            config[key] = DEFAULT_CONFIG[key]
+    return config
+
 
 def validate_config(config):
     """Checks if the input config is valid.

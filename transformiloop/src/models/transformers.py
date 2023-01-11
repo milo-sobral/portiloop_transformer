@@ -109,7 +109,9 @@ class TransformiloopFinetune(nn.Module):
 
         # Classification head which performs classification 
         self.classifier = nn.Sequential(
-            nn.Linear(config['d_model'], 1)
+            nn.Linear(config['d_model'], config['hidden_mlp'], device=config['device']),
+            nn.Tanh(),
+            nn.Linear(config['hidden_mlp'], 1, device=config['device'])
         )
     
     def forward(self, x, history):

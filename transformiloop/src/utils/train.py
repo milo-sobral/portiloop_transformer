@@ -18,7 +18,7 @@ from torchinfo import summary
 from transformiloop.src.data.pretraining import PretrainingDataset
 from transformiloop.src.data.spindle_detection import get_dataloaders
 from transformiloop.src.models.transformers import ClassificationTransformer, TransformiloopFinetune, TransformiloopPretrain
-from transformiloop.src.utils.configs import initialize_config, validate_config
+from transformiloop.src.utils.configs import fill_config, initialize_config, validate_config
 
 from transformiloop.src.utils.train_utils import (WandBLogger, finetune_epoch,
                                                   finetune_test_epoch,
@@ -138,6 +138,7 @@ def pretrain(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
 def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=False, pretrained_model=None):
 
     if pretrained_model is not None:
+        os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
         if restore:
             raise AttributeError("Cannot restore and use a pretrained model. Either restore and already started finetuning run, or start a new finetuning run from a pretrained model.")
         api = wandb.Api()
@@ -155,11 +156,14 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
         
         # Initialize the model with the pretrained weights
         cnn_encoder, transformer = model.get_models()
+
+        # Verify that config has all the required elements
+        config = fill_config(config)
+
         model = TransformiloopFinetune(config, cnn_encoder, transformer, freeze=config['freeze_pretrained'])
         
         if log_wandb:
             # Initialize WandB logging
-            os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
             wandb_run = wandb.init(
                 project=wandb_project,
                 group=wandb_group,
@@ -482,14 +486,15 @@ if __name__ == "__main__":
             'run_path': 'portiloop/portiloop/EXPERIMENT_1',
             'model_name': 'model_1240000.ckpt'
         }
+    else:
+        pretrained_dict = None
+
     if args.finetune:
-        finetune(args.wandb_group, args.wandb_project, args.experiment_name, log_wandb=args.log_wandb, restore=args.restore)
+        finetune(args.wandb_group, args.wandb_project, args.experiment_name, log_wandb=args.log_wandb, restore=args.restore, pretrained_model=pretrained_dict)
     elif args.pretrain:
         pretrain(args.wandb_group, args.wandb_project, args.experiment_name, log_wandb=args.log_wandb, restore=args.restore)
     else:
         raise AttributeError("Either pretrain or finetune must be selected")
     
-    
-
     # run(config, 'experiment_clstoken_smallerlr', 'Milo-DEBUG', save_model, unique_name, pretrain, finetune_encoder)
     
