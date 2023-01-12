@@ -1,4 +1,5 @@
 from copy import deepcopy
+import logging
 import os
 import csv
 import random
@@ -42,7 +43,7 @@ def read_pretraining_dataset(dataset_path):
             with pyedflib.EdfReader(filename) as edf_file:
                 patient_info[patient_id]['signal'] = edf_file.readSignal(0)
         except FileNotFoundError:
-            print(f"Skipping file {filename} as it is not in dataset.")
+            logging.debug(f"Skipping file {filename} as it is not in dataset.")
 
     # Remove all patients whose signal is not in dataset
     dataset = {patient_id: patient_details for (patient_id, patient_details) in patient_info.items()
@@ -69,9 +70,9 @@ class PretrainingDataset(Dataset):
         self.subjects = sorted(data.keys(), key=sort_by_gender_and_age)
         self.nb_subjects = len(self.subjects)
 
-        print(f"DEBUG: {self.nb_subjects} subjects:")
+        logging.debug(f"DEBUG: {self.nb_subjects} subjects:")
         for subject in self.subjects:
-            print(
+            logging.debug(
                 f"DEBUG: {subject}, {data[subject]['gender']}, {data[subject]['age']} yo")
 
         self.seq_len = config['seq_len']

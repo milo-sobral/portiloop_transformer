@@ -25,6 +25,7 @@ class TestPretrainingDataset(unittest.TestCase):
     def test_pretraining_dataset(self):
 
         pre_dataset = PretrainingDataset(self.dataset_path, self.config)
+        print(len(pre_dataset))
         print("Done loading dataset")
         sampler = RandomSampler(data_source=pre_dataset, replacement=True)
         pre_dl = DataLoader(
