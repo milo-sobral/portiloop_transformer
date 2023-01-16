@@ -41,6 +41,13 @@ def save_model(model, optimizer, scheduler, batch_idx, exp_name):
 
 
 def seq_rec_loss(predictions, expected, mask, loss):
+    '''
+    Compute the loss for sequence reconstruction.
+    Predictions: (batch_size, seq_len, reconstruction_dim)
+    Expected: (batch_size, seq_len, reconstruction_dim)
+    Mask: (batch_size, seq_len)
+    loss: loss function to use
+    '''
     mask = torch.where(mask==0, mask, 1).unsqueeze(-1)
     mask = mask.expand(mask.size(0), mask.size(1), predictions.size(-1))
     return loss(predictions * mask, expected * mask)
@@ -97,6 +104,9 @@ def run_pretrain_batch(batch, model, losses, device):
     # Extract batch info
     signal, gender_y, age_y, mask, masked_seq = batch
 
+    # Get the energy of signal for sequence reconstruction
+    energy = torch.sum(signal ** 2, dim=-1)
+
     # Send tensors to device
     signal = signal.to(device)
     masked_seq = masked_seq.to(device)
@@ -111,7 +121,7 @@ def run_pretrain_batch(batch, model, losses, device):
     # Get all the losses from all results for each task
     loss_gender = losses['gender'](gender_pred.squeeze(), gender_y.float())
     loss_age = losses['age'](age_pred.squeeze(), age_y.float())
-    loss_seq_rec = losses['seq_rec'](seq_rec_pred, signal, mask)
+    loss_seq_rec = losses['seq_rec'](seq_rec_pred, energy, mask)
 
     # Combine all losses by simply averaging
     loss = (loss_age + loss_gender * 100.0 + loss_seq_rec) / 3.0
