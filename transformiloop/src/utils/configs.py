@@ -34,7 +34,7 @@ DEFAULT_CONFIG = {
     'batch_size_test': 256,
 
     # Transformers Params 
-    'd_model': 512,
+    'd_model': 64,
     'n_heads': 8,
     'dim_ff': 256,
     'n_layers': 6,
@@ -46,7 +46,7 @@ DEFAULT_CONFIG = {
     'final_norm': True,
 
     # CNN Params:
-    'use_cnn_encoder': True,
+    'use_cnn_encoder': False,
     'cnn_num_layers': 3,
     'cnn_in_channels': 1,
     'cnn_channels_multiplier': 4,
@@ -80,7 +80,7 @@ DEFAULT_CONFIG = {
     'epochs_pretrain': 30,
     'es_epochs': 100000,
     'lam': 0.2,
-    'freeze_pretrained': True,
+    'freeze_pretrained': False,
     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
     'lr_step_size': 1000000,
     'lr_gamma': 0.5,
@@ -90,7 +90,7 @@ DEFAULT_CONFIG = {
     'num_training_sets': 3,
     'num_datapoints': 100000,
     'es_delta': 0.01,
-    'reconstruction_dim': 64,
+    'reconstruction_dim': 1,
     'epoch_length': -1,
 
     # Masking params

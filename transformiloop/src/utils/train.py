@@ -159,7 +159,7 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
 
         # Verify that config has all the required elements
         config = fill_config(config)
-
+        config['lr'] = 1e-6
         model = TransformiloopFinetune(config, cnn_encoder, transformer, freeze=config['freeze_pretrained'])
         
         if log_wandb:
@@ -222,6 +222,8 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
             # Get the latest model weights filename, the highest multiple of save_every which is less than the last batch
             model.load_state_dict(model_state_dict)
         model.to(config['device'])
+
+    print(summary(model))
 
     # Initialize the optimizer
     optimizer = optim.AdamW(
@@ -484,7 +486,7 @@ if __name__ == "__main__":
     if args.from_pretrained:
         pretrained_dict = {
             'run_path': 'portiloop/portiloop/EXPERIMENT_1',
-            'model_name': 'model_1240000.ckpt'
+            'model_name': 'model_10000.ckpt'
         }
     else:
         pretrained_dict = None
