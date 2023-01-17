@@ -89,6 +89,10 @@ class SleepStageDataset(Dataset):
         
         self.full_signal = torch.cat(self.full_signal)
 
+    @staticmethod
+    def get_labels():
+        return ['1', '2', '3', 'R', 'W']
+
     def __getitem__(self, index):
         # Get the signal and label at the given index
         index += self.past_signal_len
@@ -98,11 +102,11 @@ class SleepStageDataset(Dataset):
             0, self.window_size, self.seq_stride)  # TODO: double-check
         label = self.full_labels[index + self.window_size - 1]
 
-        # Convert the label to a one-hot encoding
-        all_labels = ['1', '2', '3', 'R', 'W']
-        label = torch.tensor([1 if label == l else 0 for l in all_labels])
+        # Get the index of the label that we want
+        all_labels = SleepStageDataset.get_labels()
+        label = torch.tensor(all_labels.index(label))
 
-        return signal, label
+        return signal, label.type(torch.LongTensor)
 
     def __len__(self):
         return len(self.full_signal)

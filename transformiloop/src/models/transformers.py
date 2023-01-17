@@ -24,7 +24,7 @@ class TransformiloopPretrain(nn.Module):
         )
 
         self.sequence_reconstruction = nn.Sequential(
-            nn.Linear(config['d_model'], config['hidden_mlp']),
+            nn.Linear(config['d_model'], config['reconstruction_dim']),
             nn.Tanh(),
             nn.Linear(config['hidden_mlp'], config['reconstruction_dim'])
         )
@@ -111,7 +111,7 @@ class TransformiloopFinetune(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(config['d_model'], config['hidden_mlp'], device=config['device']),
             nn.Tanh(),
-            nn.Linear(config['hidden_mlp'], 1, device=config['device'])
+            nn.Linear(config['hidden_mlp'], config['classes'], device=config['device'])
         )
     
     def forward(self, x, history):

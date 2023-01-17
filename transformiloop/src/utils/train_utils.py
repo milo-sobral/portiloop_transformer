@@ -9,6 +9,9 @@ import logging
 import wandb
 from torch.optim.lr_scheduler import _LRScheduler
 from copy import deepcopy
+from sklearn.metrics import classification_report
+
+from transformiloop.src.data.sleep_stage import SleepStageDataset
 
 
 def save_model(model, optimizer, scheduler, batch_idx, exp_name):
@@ -50,7 +53,9 @@ def seq_rec_loss(predictions, expected, mask, loss):
     '''
     mask = torch.where(mask==0, mask, 1).unsqueeze(-1)
     mask = mask.expand(mask.size(0), mask.size(1), predictions.size(-1))
-    return loss(predictions * mask, expected * mask)
+    predictions = predictions * mask
+    expected = expected * mask
+    return loss(predictions, expected)
     
 
 def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger, length=-1, last_batch=0):
@@ -60,7 +65,8 @@ def pretrain_epoch(dataloader, config, model, optim, scheduler, wandblogger, len
     loss_fns = {
         'gender': nn.BCEWithLogitsLoss(),
         'age': mse_loss,
-        'seq_rec': (lambda pred, exp, mask: seq_rec_loss(pred, exp, mask, mse_loss))
+        'seq_rec': (lambda pred, exp, mask: seq_rec_loss(pred, exp, mask, mse_loss)),
+
     }
 
     for batch_idx, batch in enumerate(dataloader):
@@ -105,7 +111,8 @@ def run_pretrain_batch(batch, model, losses, device):
     signal, gender_y, age_y, mask, masked_seq = batch
 
     # Get the energy of signal for sequence reconstruction
-    energy = torch.sum(signal ** 2, dim=-1)
+    energy = torch.sum(signal ** 2, dim=-1) / signal.size(-1)
+    energy = energy.unsqueeze(-1)
 
     # Send tensors to device
     signal = signal.to(device)
@@ -113,6 +120,7 @@ def run_pretrain_batch(batch, model, losses, device):
     mask = mask.to(device)
     gender_y = gender_y.to(device)
     age_y = age_y.to(device)
+    energy = energy.to(device)
 
     # Run model masked and unmasked to get all results
     gender_pred, age_pred, _ = model(signal, None, None)
@@ -121,10 +129,10 @@ def run_pretrain_batch(batch, model, losses, device):
     # Get all the losses from all results for each task
     loss_gender = losses['gender'](gender_pred.squeeze(), gender_y.float())
     loss_age = losses['age'](age_pred.squeeze(), age_y.float())
-    loss_seq_rec = losses['seq_rec'](seq_rec_pred, energy, mask)
+    loss_seq_rec = losses['seq_rec'](seq_rec_pred, signal, mask)
 
     # Combine all losses by simply averaging
-    loss = (loss_age + loss_gender * 100.0 + loss_seq_rec) / 3.0
+    loss = loss_gender
 
     # Returns losses and predictions
     return loss, [loss_age, loss_gender, loss_seq_rec], [gender_pred, age_pred, seq_rec_pred]
@@ -137,7 +145,10 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
     all_preds = []
     all_targets = []
 
-    classification_criterion = nn.BCEWithLogitsLoss()
+    if config['classes'] == 1:
+        classification_criterion = nn.BCEWithLogitsLoss()
+    else:
+        classification_criterion = nn.CrossEntropyLoss()
 
     for batch_idx, batch in enumerate(dataloader):
 
@@ -173,8 +184,15 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
             total_loss.append(loss.cpu().item())
     
     with torch.no_grad():
-        acc, f1, recall, precision, cm = compute_metrics(torch.stack(
-            all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+        if config['classes'] == 1:
+            acc, f1, recall, precision, cm = compute_metrics(torch.stack(
+                all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+        else:
+            metrics = classification_report(
+                torch.stack(all_targets, dim=0).to(device),
+                torch.stack(all_preds, dim=0).to(device),
+                target_names=SleepStageDataset.get_labels())
+            print(metrics)
     
     if wandb_run is not None:
         wandb_run.log({
@@ -199,7 +217,10 @@ def finetune_test_epoch(dataloader, config, classifier, device, wandb_run):
         all_targets = []
         total_loss = []
 
-        classification_criterion = nn.BCEWithLogitsLoss()
+        if config['classes'] == 1:
+            classification_criterion = nn.BCEWithLogitsLoss()
+        else:
+            classification_criterion = nn.CrossEntropyLoss()
         history, seqs = None, None
         for batch_idx, batch in enumerate(dataloader):
             
@@ -225,8 +246,14 @@ def finetune_test_epoch(dataloader, config, classifier, device, wandb_run):
                 all_targets.append(batch[1].detach())
                 total_loss.append(loss.cpu().item())
 
-        acc, f1, recall, precision, cm = compute_metrics(torch.stack(
-            all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+        if config['classes'] == 1:
+            acc, f1, recall, precision, cm = compute_metrics(torch.stack(
+                all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+        else:
+            metrics = classification_report(
+                torch.stack(all_targets, dim=0).to(device),
+                torch.stack(all_preds, dim=0).to(device),
+                target_names=SleepStageDataset.get_labels())
 
     if wandb_run is not None:
         wandb_run.log({'val/accuracy': acc, 'val/F1': f1, 'val/recall': recall, 'val/precision': precision})
@@ -270,8 +297,14 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device, training,
 
     # If we have performed inference, get predictions and loss and return them
     if inferred:
+        # Convert logits to double if necessary
+        if config['classes'] != 1:
+            logits = logits.type(torch.FloatTensor)
         loss = loss(logits, labels)
-        predictions = (torch.sigmoid(logits) > config['threshold']).int()
+        if config['classes'] == 1:
+            predictions = (torch.sigmoid(logits) > config['threshold']).int()
+        else:
+            predictions = torch.argmax(logits, dim=-1)
         return loss, predictions, seqs
 
     # We return None otherwise
@@ -350,6 +383,8 @@ def count_shapes(tensor_list):
 
 class WarmupTransformerLR(_LRScheduler):
     def __init__(self, optimizer, warmup_steps, target_lr, decay, last_epoch=-1, verbose=False):
+        if warmup_steps < 1:
+            warmup_steps = 1
         self.warmup_steps = warmup_steps
         self.target_lr = target_lr
         self.slope = target_lr / warmup_steps

@@ -90,13 +90,14 @@ DEFAULT_CONFIG = {
     'num_training_sets': 3,
     'num_datapoints': 100000,
     'es_delta': 0.01,
-    'reconstruction_dim': 1,
+    'reconstruction_dim': 64,
     'epoch_length': -1,
+    'classes': 5,
 
     # Masking params
-    'ratio_masked': 0.5,
-    'ratio_replaced': 0.15,
-    'ratio_kept': 0.15,
+    'ratio_masked': 0.3,
+    'ratio_replaced': 0.0,
+    'ratio_kept': 1.0,
 
     # Finetuning data config
     # 'subjects_path': DATASET_PATH,

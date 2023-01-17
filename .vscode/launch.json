@@ -8,15 +8,14 @@
             "name": "Python:Debug Tests",
             "type": "python",
             "request": "launch",
-            "purpose": [
-                "debug-test"
-            ],
+            // "purpose": [
+            //     "debug-test"
+            // ],
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
                 "-f",
-                
             ]
         }
     ]
