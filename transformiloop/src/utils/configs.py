@@ -18,7 +18,7 @@ def initialize_config(name):
 
 DEFAULT_CONFIG = {
     # Data params
-    'batch_size' : 200,
+    'batch_size' : 128,
     'seq_len': 64,
     'window_size': 64,
     'seq_stride': 64,
@@ -81,7 +81,7 @@ DEFAULT_CONFIG = {
     'es_epochs': 100000,
     'lam': 0.2,
     'freeze_pretrained': False,
-    'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+    'device': torch.device('cpu'), # 'cuda' if torch.cuda.is_available() else 'cpu'
     'lr_step_size': 1000000,
     'lr_gamma': 0.5,
 

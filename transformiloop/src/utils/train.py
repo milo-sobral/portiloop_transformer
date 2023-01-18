@@ -16,6 +16,7 @@ import wandb
 from torch.nn import BCEWithLogitsLoss
 from torchinfo import summary
 from transformiloop.src.data.pretraining import PretrainingDataset
+from transformiloop.src.data.sleep_stage import get_dataloaders_sleep_stage
 from transformiloop.src.data.spindle_detection import get_dataloaders
 from transformiloop.src.models.transformers import ClassificationTransformer, TransformiloopFinetune, TransformiloopPretrain
 from transformiloop.src.utils.configs import fill_config, initialize_config, validate_config
@@ -135,7 +136,7 @@ def pretrain(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
             raise e
 
 
-def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=False, pretrained_model=None):
+def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=False, task=None, pretrained_model=None):
 
     if pretrained_model is not None:
         os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
@@ -240,8 +241,15 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
         scheduler.load_state_dict(model_dict['scheduler'])
 
     # Initialize dataset
-    dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
-    train_dl, val_dl, _ = get_dataloaders(config, dataset_path)
+    if task is None:
+        raise AttributeError("Task must be specified.")
+    elif task == 'spindles':
+        dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
+        train_dl, val_dl, _ = get_dataloaders(config, dataset_path)
+    elif task == 'sleep_stages': 
+        dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
+        MASS_dir = dataset_path / 'MASS_preds'
+        train_dl, val_dl = get_dataloaders_sleep_stage(MASS_dir, dataset_path, config)
 
     # Start training
     for epoch in range(config['epochs']):
@@ -459,7 +467,13 @@ if __name__ == "__main__":
     group2 = parser.add_mutually_exclusive_group()
     group2.add_argument('-r', '--restore', action='store_true', default=False, help='Restore a run that exists. If that option is selected, make sure to provide a run name')
     group2.add_argument('--from_pretrained', action='store_true', default=False, help='Load the weights from a pretrained model instead of training from scratch. If that option is used, the latest pretrained model will be used.')
-   
+    
+    # Choose what task to perform
+    group3 = parser.add_mutually_exclusive_group()
+    group3.add_argument('--spindles', action='store_true', help='Finetune the model on the spindle dataset')
+    group3.add_argument('--spindle_trains', action='store_true', help='Finetune the model on the spindle trains dataset')
+    group3.add_argument('--sleep_stages', action='store_true', help='Finetune the model on the sleep stages dataset')
+
     # Configuration file
     parser.add_argument('--config', type=str, default=None, help='Path to the configuration file. If none is provided, the default configuration will be used')
 
@@ -483,6 +497,20 @@ if __name__ == "__main__":
     if args.from_pretrained and args.restore:
         raise AttributeError("You cannot use the from_pretrained and restore arguments at the same time")
 
+    # Check if the task is specified
+    if not args.spindles and not args.spindle_trains and not args.sleep_stages and args.pretrain:
+        raise AttributeError("You must specify a task to perform")
+    else:
+        if args.spindles:
+            task = 'spindles'
+        elif args.spindle_trains:
+            task = 'spindle_trains'
+        elif args.sleep_stages:
+            task = 'sleep_stages'
+        else:
+            task = None
+
+    # Load the configuration file
     if args.from_pretrained:
         pretrained_dict = {
             'run_path': 'portiloop/portiloop/EXPERIMENT_1',
@@ -492,7 +520,7 @@ if __name__ == "__main__":
         pretrained_dict = None
 
     if args.finetune:
-        finetune(args.wandb_group, args.wandb_project, args.experiment_name, log_wandb=args.log_wandb, restore=args.restore, pretrained_model=pretrained_dict)
+        finetune(args.wandb_group, args.wandb_project, args.experiment_name, log_wandb=args.log_wandb, restore=args.restore, task=task, pretrained_model=pretrained_dict)
     elif args.pretrain:
         pretrain(args.wandb_group, args.wandb_project, args.experiment_name, log_wandb=args.log_wandb, restore=args.restore)
     else:

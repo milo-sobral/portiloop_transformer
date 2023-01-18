@@ -8,6 +8,47 @@ import torch
 from transformiloop.src.data.pretraining import read_pretraining_dataset
 
 
+def get_dataloaders_sleep_stage(MASS_dir, ds_dir, config):
+    """
+    Get the dataloaders for the MASS dataset
+    - Start by dividing the available subjects into train and test sets
+    - Create the train and test datasets and dataloaders
+    """
+    # Read all the subjects available in the dataset
+    labels = read_sleep_staging_labels(ds_dir) 
+
+    # Divide the subjects into train and test sets
+    subjects = list(labels.keys())
+    random.shuffle(subjects)
+    train_subjects = subjects[:int(len(subjects) * 0.8)]
+    test_subjects = subjects[int(len(subjects) * 0.8):]
+
+    # Read the pretraining dataset
+    data = read_pretraining_dataset(MASS_dir)
+
+    # Create the train and test datasets
+    train_dataset = SleepStageDataset(train_subjects, data, labels, config)
+    test_dataset = SleepStageDataset(test_subjects, data, labels, config)
+
+    # Create the train and test dataloaders
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=config['batch_size'],
+        sampler=SleepStageSampler(train_dataset, config),
+        pin_memory=True,
+        drop_last=True
+    )
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=config['batch_size_validation'],
+        sampler=SleepStageSampler(test_dataset, config),
+        pin_memory=True,
+        drop_last=True
+    )
+
+    return train_dataloader, test_dataloader
+
+
 def read_sleep_staging_labels(MASS_dir):
     '''
     Read the sleep_staging.csv file in the given directory and stores info in a dictionary
@@ -28,36 +69,31 @@ def read_sleep_staging_labels(MASS_dir):
     
 
 class SleepStageSampler(Sampler):
-    def __init__(self, dataset):
-        # Get the indices of all the '?' in the labels
-        self.indices = [i for i in range(len(dataset.full_labels)) if dataset.full_labels[i] != '?']
-
-        # Shuffle the indices
-        random.shuffle(self.indices)
+    def __init__(self, dataset, config):
+        self.max_len = len(dataset)
+        self.dataset = dataset
+        self.window_size = config['window_size']
 
     def __iter__(self):
-        return iter(self.indices)
+        while True:
+            index = random.randint(0, self.max_len - 1)
+            # Make sure that the label at the end of the window is not '?'
+            label = self.dataset.full_labels[index + self.window_size - 1]
+            if label != SleepStageDataset.get_labels().index('?'):
+                yield index
 
     def __len__(self):
         return len(self.indices)
 
 
 class SleepStageDataset(Dataset):
-    def __init__(self, subjects, MASS_dir, data, labels, config):
+    def __init__(self, subjects, data, labels, config):
         '''
         This class takes in a list of subject, a path to the MASS directory 
         and reads the files associated with the given subjects as well as the sleep stage annotations
         '''
         super().__init__()
 
-        # list all files in the MASS directory
-        files = os.listdir(MASS_dir)
-
-        # Make sure that the files that we need are present
-        assert 'sleep_staging.csv' in files
-        assert 'MASS_preds' in files
-
-        # 
         self.config = config
         self.window_size = config['window_size']
         self.seq_len = config['seq_len']
@@ -70,28 +106,34 @@ class SleepStageDataset(Dataset):
         self.full_labels = []
 
         for subject in subjects:
-            assert subject in data.keys()
-            signal = data[subject]['signal']
+            if subject not in data.keys():
+                print(f"Subject {subject} not found in the pretraining dataset")
+                continue
+            # assert subject in data.keys(), f"Subject {subject} not found in the pretraining dataset" 
+            signal = torch.tensor(
+                data[subject]['signal'], dtype=torch.float)
             # Get all the labels for the given subject
             label = []
             for lab in labels[subject]:
-                label += [lab] * self.config['fe']
+                label += [SleepStageDataset.get_labels().index(lab)] * self.config['fe']
             
             # Add some '?' padding at the end to make sure the length of signal and label match
-            label += ['?'] * (len(signal) - len(label))
+            label += [SleepStageDataset.get_labels().index('?')] * (len(signal) - len(label))
 
             # Make sure that the signal and the labels are the same length
             assert len(signal) == len(label)
 
             # Add to full signal and full label
-            self.full_labels += label
-            self.full_signal.append(torch.tensor(signal.tolist()))
+            self.full_labels.append(torch.tensor(label, dtype=torch.uint8))
+            self.full_signal.append(signal)
+            del data[subject], signal, label
         
         self.full_signal = torch.cat(self.full_signal)
+        self.full_labels = torch.cat(self.full_labels)
 
     @staticmethod
     def get_labels():
-        return ['1', '2', '3', 'R', 'W']
+        return ['1', '2', '3', 'R', 'W', '?']
 
     def __getitem__(self, index):
         # Get the signal and label at the given index
@@ -102,9 +144,7 @@ class SleepStageDataset(Dataset):
             0, self.window_size, self.seq_stride)  # TODO: double-check
         label = self.full_labels[index + self.window_size - 1]
 
-        # Get the index of the label that we want
-        all_labels = SleepStageDataset.get_labels()
-        label = torch.tensor(all_labels.index(label))
+        assert label != 5, "Label is '?'"
 
         return signal, label.type(torch.LongTensor)
 

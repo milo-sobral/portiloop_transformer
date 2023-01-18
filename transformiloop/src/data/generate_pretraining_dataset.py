@@ -60,7 +60,9 @@ def extract_sleep_staging_data(annotations):
                 logging.info(f"adding empty labels {int(onset - curr_index)}")
                 labels += ['?'] * int(onset - curr_index)
         # Add the label
-        labels += [label.strip('Sleep stage ')] * int(duration)
+        assert label in ['Sleep stage W', 'Sleep stage 1', 'Sleep stage 2', 'Sleep stage 3', 'Sleep stage 4', 'Sleep stage R', 'Sleep stage ?'], f"Unknown label {label}"
+        label = label.strip('Sleep stage ')
+        labels += [label if label != '4' else '3'] * int(duration)
         curr_index = onset + duration
 
     return np.array(labels)

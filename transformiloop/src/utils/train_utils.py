@@ -191,7 +191,7 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
             metrics = classification_report(
                 torch.stack(all_targets, dim=0).to(device),
                 torch.stack(all_preds, dim=0).to(device),
-                target_names=SleepStageDataset.get_labels())
+                target_names=SleepStageDataset.get_labels()[:-1])
             print(metrics)
     
     if wandb_run is not None:
@@ -253,7 +253,7 @@ def finetune_test_epoch(dataloader, config, classifier, device, wandb_run):
             metrics = classification_report(
                 torch.stack(all_targets, dim=0).to(device),
                 torch.stack(all_preds, dim=0).to(device),
-                target_names=SleepStageDataset.get_labels())
+                target_names=SleepStageDataset.get_labels()[:-1])
 
     if wandb_run is not None:
         wandb_run.log({'val/accuracy': acc, 'val/F1': f1, 'val/recall': recall, 'val/precision': precision})
@@ -298,8 +298,8 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device, training,
     # If we have performed inference, get predictions and loss and return them
     if inferred:
         # Convert logits to double if necessary
-        if config['classes'] != 1:
-            logits = logits.type(torch.FloatTensor)
+        # if config['classes'] != 1:
+        #     logits = logits.type(torch.FloatTensor)
         loss = loss(logits, labels)
         if config['classes'] == 1:
             predictions = (torch.sigmoid(logits) > config['threshold']).int()
