@@ -18,6 +18,7 @@ from torchinfo import summary
 from transformiloop.src.data.pretraining import PretrainingDataset
 from transformiloop.src.data.sleep_stage import get_dataloaders_sleep_stage
 from transformiloop.src.data.spindle_detection import get_dataloaders
+from transformiloop.src.data.spindle_trains import get_dataloaders_spindle_trains
 from transformiloop.src.models.transformers import ClassificationTransformer, TransformiloopFinetune, TransformiloopPretrain
 from transformiloop.src.utils.configs import fill_config, initialize_config, validate_config
 
@@ -250,6 +251,9 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
         dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
         MASS_dir = dataset_path / 'MASS_preds'
         train_dl, val_dl = get_dataloaders_sleep_stage(MASS_dir, dataset_path, config)
+    elif task == 'spindle_trains':
+        dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
+        train_dl, val_dl = get_dataloaders_spindle_trains(dataset_path, config)
 
     # Start training
     for epoch in range(config['epochs']):

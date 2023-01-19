@@ -92,7 +92,7 @@ DEFAULT_CONFIG = {
     'es_delta': 0.01,
     'reconstruction_dim': 64,
     'epoch_length': -1,
-    'classes': 5,
+    'classes': 4,
 
     # Masking params
     'ratio_masked': 0.3,
