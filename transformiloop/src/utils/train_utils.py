@@ -9,9 +9,10 @@ import logging
 import wandb
 from torch.optim.lr_scheduler import _LRScheduler
 from copy import deepcopy
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix
 
 from transformiloop.src.data.sleep_stage import SleepStageDataset
+from transformiloop.src.data.spindle_trains import SpindleTrainDataset
 
 
 def save_model(model, optimizer, scheduler, batch_idx, exp_name):
@@ -184,15 +185,17 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
             total_loss.append(loss.cpu().item())
     
     with torch.no_grad():
+        predictions = torch.flatten(torch.stack(all_preds, dim=0)).cpu()
+        targets = torch.flatten(torch.stack(all_targets, dim=0)).cpu()
         if config['classes'] == 1:
-            acc, f1, recall, precision, cm = compute_metrics(torch.stack(
-                all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+            acc, f1, recall, precision, cm = compute_metrics(predictions, targets)
         else:
-            metrics = classification_report(
-                torch.stack(all_targets, dim=0).to(device),
-                torch.stack(all_preds, dim=0).to(device),
-                target_names=SleepStageDataset.get_labels()[:-1])
+            metrics = classification_report(\
+                targets, predictions, labels=[0, 1, 2, 3], target_names=SpindleTrainDataset.get_labels())
+            confusion_mat = confusion_matrix(targets, predictions, labels=[0, 1, 2, 3])
             print(metrics)
+            print(confusion_mat)
+            acc, f1, recall, precision, cm = None, None, None, None, None
     
     if wandb_run is not None:
         wandb_run.log({
@@ -246,14 +249,18 @@ def finetune_test_epoch(dataloader, config, classifier, device, wandb_run):
                 all_targets.append(batch[1].detach())
                 total_loss.append(loss.cpu().item())
 
+        predictions = torch.flatten(torch.stack(all_preds, dim=0)).cpu()
+        targets = torch.flatten(torch.stack(all_targets, dim=0)).cpu()
         if config['classes'] == 1:
             acc, f1, recall, precision, cm = compute_metrics(torch.stack(
                 all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
         else:
-            metrics = classification_report(
-                torch.stack(all_targets, dim=0).to(device),
-                torch.stack(all_preds, dim=0).to(device),
-                target_names=SleepStageDataset.get_labels()[:-1])
+            metrics = classification_report(\
+                targets, predictions, labels=[0, 1, 2, 3], target_names=SpindleTrainDataset.get_labels())
+            confusion_mat = confusion_matrix(targets, predictions, labels=[0, 1, 2, 3])
+            print(metrics)
+            print(confusion_mat)
+            acc, f1, recall, precision, cm = None, None, None, None, None
 
     if wandb_run is not None:
         wandb_run.log({'val/accuracy': acc, 'val/F1': f1, 'val/recall': recall, 'val/precision': precision})

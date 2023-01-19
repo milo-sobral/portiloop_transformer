@@ -253,7 +253,8 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
         train_dl, val_dl = get_dataloaders_sleep_stage(MASS_dir, dataset_path, config)
     elif task == 'spindle_trains':
         dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
-        train_dl, val_dl = get_dataloaders_spindle_trains(dataset_path, config)
+        MASSdataset_path = dataset_path / 'MASS_preds'
+        train_dl, val_dl = get_dataloaders_spindle_trains(MASSdataset_path, dataset_path, config)
 
     # Start training
     for epoch in range(config['epochs']):

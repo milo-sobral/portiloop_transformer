@@ -24,7 +24,7 @@
             "justMyCode": true,
             "args": [
                 "-f",
-                "--sleep_stages"
+                "--spindle_trains"
             ]
         }
     ]

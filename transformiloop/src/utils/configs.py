@@ -23,7 +23,7 @@ DEFAULT_CONFIG = {
     'window_size': 64,
     'seq_stride': 64,
     'network_stride': 20,
-    'max_val_batches': -1,
+    'max_val_batches': 2000,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
     'embedding_size': 512,
@@ -81,7 +81,7 @@ DEFAULT_CONFIG = {
     'es_epochs': 100000,
     'lam': 0.2,
     'freeze_pretrained': False,
-    'device': torch.device('cpu'), # 'cuda' if torch.cuda.is_available() else 'cpu'
+    'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
     'lr_step_size': 1000000,
     'lr_gamma': 0.5,
 
