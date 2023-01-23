@@ -31,13 +31,16 @@ def read_patient_info(dataset_path):
     return patient_info
 
 
-def read_pretraining_dataset(dataset_path):
+def read_pretraining_dataset(dataset_path, patients_to_keep=None):
     """
     Load all dataset files into a dictionary to be ready for a Pytorch Dataset.
     Note that this will only read the first signal even if the EDF file contains more.
     """
     patient_info = read_patient_info(dataset_path)
+
     for patient_id in patient_info.keys():
+        if patients_to_keep is not None and patient_id not in patients_to_keep:
+            continue
         filename = os.path.join(dataset_path, patient_id + ".edf")
         try:
             with pyedflib.EdfReader(filename) as edf_file:
