@@ -70,15 +70,15 @@ def read_sleep_staging_labels(MASS_dir):
 
 class SleepStageSampler(Sampler):
     def __init__(self, dataset, config):
-        self.max_len = len(dataset)
         self.dataset = dataset
         self.window_size = config['window_size']
+        self.max_len = len(dataset) - self.dataset.past_signal_len - self.window_size
 
     def __iter__(self):
         while True:
             index = random.randint(0, self.max_len - 1)
             # Make sure that the label at the end of the window is not '?'
-            label = self.dataset.full_labels[index + self.window_size - 1]
+            label = self.dataset.full_labels[index + self.dataset.past_signal_len + self.window_size - 1]
             if label != SleepStageDataset.get_labels().index('?'):
                 yield index
 

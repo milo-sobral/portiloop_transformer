@@ -139,7 +139,7 @@ def run_pretrain_batch(batch, model, losses, device):
     return loss, [loss_age, loss_gender, loss_seq_rec], [gender_pred, age_pred, seq_rec_pred]
     
 
-def finetune_epoch(dataloader, config, device, classifier, classifier_optim, scheduler, wandb_run):
+def finetune_epoch(dataloader, config, device, classifier, classifier_optim, scheduler, wandb_run, epoch):
     classifier.train()
 
     total_loss = []
@@ -188,30 +188,43 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
         predictions = torch.flatten(torch.stack(all_preds, dim=0)).cpu()
         targets = torch.flatten(torch.stack(all_targets, dim=0)).cpu()
         if config['classes'] == 1:
-            acc, f1, recall, precision, cm = compute_metrics(predictions, targets)
+            acc, f1, recall, precision, cm = compute_metrics(torch.stack(
+                all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+            metrics = {
+                'train/accuracy': acc,
+                'train/F1': f1,
+                'train/recall': recall,
+                'train/precision': precision,
+                'train/conf_mat': cm
+            }
         else:
-            metrics = classification_report(\
-                targets, predictions, labels=[0, 1, 2, 3], target_names=SpindleTrainDataset.get_labels())
-            confusion_mat = confusion_matrix(targets, predictions, labels=[0, 1, 2, 3])
-            print(metrics)
-            print(confusion_mat)
-            acc, f1, recall, precision, cm = None, None, None, None, None
+            metrics = classification_report(
+                targets, 
+                predictions, 
+                labels=list(range(config['classes'])), 
+                target_names=SpindleTrainDataset.get_labels() if config['classes'] == 4 else SleepStageDataset.get_labels()[:-1],
+                output_dict=True)
+            # Add "val/" to the key of all the metrics
+            metrics = {f"train/{key}": value for key, value in metrics.items()}
+            # Add the confusion matrix to the metrics
     
+    metrics['epoch'] = epoch
+    metrics['train/loss'] = torch.tensor(total_loss).mean().cpu().item()
+    metrics['learning_rate'] = float(classifier_optim.param_groups[0]['lr'])
+    metrics['gradient_plot'] = plot_gradients
     if wandb_run is not None:
-        wandb_run.log({
-            'train/loss': torch.tensor(total_loss).mean().cpu().item(),
-            'train/accuracy': acc,
-            'train/F1': f1,
-            'train/recall': recall,
-            'train/precision': precision,
-            'learning_rate': float(classifier_optim.param_groups[0]['lr']),
-            'gradient_plot': plot_gradients
-        })
+        metrics['train/conf_mat'] = wandb.plot.confusion_matrix(
+            probs=None,
+            y_true=targets.tolist(),
+            preds=predictions.tolist(),
+            class_names=SpindleTrainDataset.get_labels() if config['classes'] == 4 else SleepStageDataset.get_labels()[:-1],
+        )
+        wandb_run.log(metrics)
 
-    return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm, plot_gradients
+    return metrics
 
 
-def finetune_test_epoch(dataloader, config, classifier, device, wandb_run):
+def finetune_test_epoch(dataloader, config, classifier, device, wandb_run, epoch):
     with torch.no_grad():
         
         classifier.eval()
@@ -254,18 +267,37 @@ def finetune_test_epoch(dataloader, config, classifier, device, wandb_run):
         if config['classes'] == 1:
             acc, f1, recall, precision, cm = compute_metrics(torch.stack(
                 all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).to(device))
+            metrics = {
+                'val/accuracy': acc,
+                'val/F1': f1,
+                'val/recall': recall,
+                'val/precision': precision,
+                'val/conf_mat': cm
+            }
         else:
-            metrics = classification_report(\
-                targets, predictions, labels=[0, 1, 2, 3], target_names=SpindleTrainDataset.get_labels())
-            confusion_mat = confusion_matrix(targets, predictions, labels=[0, 1, 2, 3])
-            print(metrics)
-            print(confusion_mat)
-            acc, f1, recall, precision, cm = None, None, None, None, None
-
+            metrics = classification_report(
+                targets, 
+                predictions, 
+                labels=list(range(config['classes'])), 
+                target_names=SpindleTrainDataset.get_labels() if config['classes'] == 4 else SleepStageDataset.get_labels()[:-1],
+                output_dict=True)
+            # Add "val/" to the key of all the metrics
+            metrics = {f"val/{key}": value for key, value in metrics.items()}
+            # Add the loss to the metrics
+            
+    metrics['val/loss'] = torch.tensor(total_loss).mean().cpu().item()
+    metrics['epoch'] = epoch
     if wandb_run is not None:
-        wandb_run.log({'val/accuracy': acc, 'val/F1': f1, 'val/recall': recall, 'val/precision': precision})
+        # Add the confusion matrix to the metrics
+        metrics['val/conf_mat'] = wandb.plot.confusion_matrix(
+            probs=None,
+            y_true=targets.tolist(),
+            preds=predictions.tolist(),
+            class_names=SpindleTrainDataset.get_labels() if config['classes'] == 4 else SleepStageDataset.get_labels()[:-1],
+        )
+        wandb_run.log(metrics)
 
-    return torch.tensor(total_loss).mean(), acc, f1, recall, precision, cm
+    return metrics
 
 
 def simple_run_finetune_batch(batch, classifier, loss, config, device, training, seqs=None, history=None):

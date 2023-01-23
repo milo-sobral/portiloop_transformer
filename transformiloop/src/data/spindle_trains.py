@@ -37,14 +37,14 @@ def get_dataloaders_spindle_trains(MASS_dir, ds_dir, config):
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=config['batch_size'],
-        sampler=EquiRandomSampler(train_dataset, config),
+        sampler=EquiRandomSampler(),
         pin_memory=True,
         drop_last=True
     )
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=config['batch_size_validation'],
-        sampler=EquiRandomSampler(test_dataset, config),
+        sampler=EquiRandomSampler(),
         pin_memory=True,
         drop_last=True
     )
@@ -53,14 +53,18 @@ def get_dataloaders_spindle_trains(MASS_dir, ds_dir, config):
 
 
 class EquiRandomSampler(Sampler):
-    def __init__(self):
-        super.__init__()
-            
+    def __init__(self, ratio=0.5):
+        self.ratio_spindles = ratio
+
     def __iter__(self):
         # Check that self.full_labels and self.dataset.full_labels are the same
         while True:
-            next_label = random.randint(0, 1)
-            yield next_label
+            # Get a random between 0 and 1
+            next_label = random.random()
+            if next_label < self.ratio_spindles:
+                yield 0
+            else:
+                yield 1
             
     def __len__(self):
         return len(self.dataset)

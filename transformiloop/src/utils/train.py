@@ -260,7 +260,7 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
     for epoch in range(config['epochs']):
         try:
             logging.debug(f"Starting epoch {epoch}")
-            train_loss, train_acc, train_f1, train_rec, train_prec, train_cm, grads_flow = finetune_epoch(
+            train_metrics = finetune_epoch(
                 train_dl, 
                 config, 
                 config['device'],
@@ -268,13 +268,15 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
                 optimizer,
                 scheduler,
                 wandb_run,
+                epoch
             )
-            val_loss, val_acc, val_f1, val_rec, val_prec, val_cm = finetune_test_epoch(
+            val_metrics = finetune_test_epoch(
                 val_dl,
                 config,
                 model,
                 config['device'],
                 wandb_run,
+                epoch
             )
         except Exception as e:
             if wandb_run:

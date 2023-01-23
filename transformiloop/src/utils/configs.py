@@ -23,7 +23,7 @@ DEFAULT_CONFIG = {
     'window_size': 64,
     'seq_stride': 64,
     'network_stride': 20,
-    'max_val_batches': 2000,
+    'max_val_batches': 1000,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
     'embedding_size': 512,
@@ -37,7 +37,7 @@ DEFAULT_CONFIG = {
     'd_model': 64,
     'n_heads': 8,
     'dim_ff': 256,
-    'n_layers': 6,
+    'n_layers': 1,
     'latent_dim': 32,
     'q_dim': 32,
     'v_dim': 32,
@@ -82,7 +82,7 @@ DEFAULT_CONFIG = {
     'lam': 0.2,
     'freeze_pretrained': False,
     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-    'lr_step_size': 1000000,
+    'lr_step_size': 10000,
     'lr_gamma': 0.5,
 
     # Pretraining data 
@@ -92,7 +92,7 @@ DEFAULT_CONFIG = {
     'es_delta': 0.01,
     'reconstruction_dim': 64,
     'epoch_length': -1,
-    'classes': 4,
+    'classes': 5,
 
     # Masking params
     'ratio_masked': 0.3,

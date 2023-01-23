@@ -24,7 +24,8 @@
             "justMyCode": true,
             "args": [
                 "-f",
-                "--spindle_trains"
+                "--spindle_trains",
+                "-l"
             ]
         }
     ]
