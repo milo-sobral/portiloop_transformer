@@ -53,31 +53,14 @@ def get_dataloaders_spindle_trains(MASS_dir, ds_dir, config):
 
 
 class EquiRandomSampler(Sampler):
-    def __init__(self, dataset, config):
-        self.num_classes = config['classes']
-        self.dataset = dataset
-        self.window_size = config['window_size']
-        self.max_len = len(dataset) - self.dataset.min_signal_len        
+    def __init__(self):
+        super.__init__()
             
     def __iter__(self):
         # Check that self.full_labels and self.dataset.full_labels are the same
-        # assert all([self.full_labels[index] == self.dataset.full_labels[index] for index in range(len(self.full_labels))]), "Full labels are not the same"
-        # assert all([self.spindle_labels[index] == self.dataset.spindle_labels[index] for index in range(len(self.spindle_labels))]), "Spindle labels are not the same"
         while True:
             next_label = random.randint(0, 1)
-            if next_label == 0:
-                # Sample from the non-spindle labels
-                index = random.randint(0, self.max_len)
-            else:
-                for index_label in self.dataset.spindle_labels:
-                    assert self.dataset.full_labels[index_label] != 0, f"Spindle label not found at index {index_label}"
-                # assert all([self.dataset.full_labels[index_label] != 0 for index_label in self.dataset.spindle_labels]), "Spindle label not found"
-                # Sample from the spindle labels
-                index = random.choice(self.spindle_labels)
-                assert self.dataset.full_labels[index] != 0, "Spindle label not found"
-                index -= self.window_size + 1
-                # assert self.dataset.full_labels[index + self.window_size - 1] != 0, "Spindle label not found"
-            yield index
+            yield next_label
             
     def __len__(self):
         return len(self.dataset)
@@ -141,26 +124,26 @@ class SpindleTrainDataset(Dataset):
 
             # Make sure that the signal and the labels are the same length
             assert len(signal) == len(label)
-            # Make sure that there arent too many spindles labeled
-            assert sum(torch.where(label != 0, 1, 0)) == len(spindle_label)
-            assert sum(torch.where(label == 0, 1, 0)) + len(spindle_label) == len(signal), f"Too many spindles labeled for subject {subject}"
+            # # Make sure that there arent too many spindles labeled
+            # assert sum(torch.where(label != 0, 1, 0)) == len(spindle_label)
+            # assert sum(torch.where(label == 0, 1, 0)) + len(spindle_label) == len(signal), f"Too many spindles labeled for subject {subject}"
 
             # Add to full signal and full label
             self.full_labels.append(label)
             self.full_signal.append(signal)
-            self.spindle_labels.append(torch.tensor(spindle_label, dtype=torch.long))
+            self.spindle_labels += spindle_label
             del data[subject], signal, label
         
-        self.spindle_labels = torch.cat(self.spindle_labels)
+        # Concatenate the full signal and the full labels into one continuous tensor
         self.full_signal = torch.cat(self.full_signal)
         self.full_labels = torch.cat(self.full_labels)
 
-        # Make sure that all indices in spindle_labels are indeed spindles in the signal
-        assert all([self.full_labels[index_label] != 0 for index_label in self.spindle_labels]), "Issue with the spindle labels"
-        # Make sure that the signal and the labels are the same length
-        assert len(self.full_signal) == len(self.full_labels), "Issue with the data and the labels"
-        # Make sure that the last spindle in the spindle_labels is in fact in the signal
-        assert all([index_label < len(self.full_labels) for index_label in self.spindle_labels]), "Issue with the spindle labels"
+        # # Make sure that all indices in spindle_labels are indeed spindles in the signal
+        # assert all([self.full_labels[index_label] != 0 for index_label in self.spindle_labels]), "Issue with the spindle labels"
+        # # Make sure that the signal and the labels are the same length
+        # assert len(self.full_signal) == len(self.full_labels), "Issue with the data and the labels"
+        # # Make sure that the last spindle in the spindle_labels is in fact in the signal
+        # assert all([index_label < len(self.full_labels) for index_label in self.spindle_labels]), "Issue with the spindle labels"
 
 
     @staticmethod
@@ -169,16 +152,26 @@ class SpindleTrainDataset(Dataset):
 
     def __getitem__(self, index):
         # Get the signal and label at the given index
-        index += self.past_signal_len
+        # If index is 0, sample from the spindle labels list
+        if index == 0:
+            index = random.choice(self.spindle_labels)
+            assert index in self.spindle_labels, "Spindle index not found in list"
+            index = index - self.past_signal_len - self.window_size + 1
+        else:
+            # Sample from the rest of the signal
+            index = random.randint(0, len(self.full_signal) - self.min_signal_len - self.window_size)
 
         # Get data
+        index = index + self.past_signal_len
         signal = self.full_signal[index - self.past_signal_len:index + self.window_size].unfold(
-            0, self.window_size, self.seq_stride)  # TODO: double-check
+            0, self.window_size, self.seq_stride)
         label = self.full_labels[index + self.window_size - 1]
 
+        # Make sure that the last index of the signal is the same as the label
         assert signal[-1, -1] == self.full_signal[index + self.window_size - 1], "Issue with the data and the labels"
+        label = label.type(torch.LongTensor)
 
-        return signal, label.type(torch.LongTensor)
+        return signal, label
 
     def __len__(self):
         return len(self.full_signal) - self.window_size

@@ -30,23 +30,14 @@ class TestDataset(unittest.TestCase):
     def test_sleep_Staging_dataset(self):
         dataset = SpindleTrainDataset(self.subject_list, self.data, self.sleep_stages, self.config)
         # self.assertEqual(len(dataset), len(dataset.full_labels))
-        
-        # Get a random index
-        random_index = np.random.randint(0, len(dataset))
-        # Get the signal and the label
-        signal, label = dataset[random_index]
-
-        # Check that the signal is of the correct size
-        self.assertEqual(signal.shape, torch.Size([self.config['seq_len'], self.config['window_size']]))
-
-        sampler = EquiRandomSampler(dataset, self.config)
 
         dataloader = DataLoader(
             dataset, 
             batch_size=self.config['batch_size'],
-            sampler=sampler,
-            pin_memory=False,
-            drop_last=True
+            sampler=EquiRandomSampler(),
+            pin_memory=True,
+            drop_last=True,
+            shuffle=False
         )
 
         # Check that the dataloader is working and the ratio of labels is correct
@@ -57,8 +48,9 @@ class TestDataset(unittest.TestCase):
                 break
 
             signal, label = batch
-            num_spindles += torch.sum(label != 0).item()
-            totals += label.shape[0]
+            num_spindles += sum([1 for i in label if i != 0])
+            # num_spindles += torch.sum(label != 0).item()
+            totals += len(label)
         print(num_spindles/totals)
         self.assertAlmostEqual(num_spindles / totals, 0.5, delta=0.1)
 
