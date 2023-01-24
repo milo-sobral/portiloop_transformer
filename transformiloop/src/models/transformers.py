@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from transformiloop.src.models.model_blocks import build_encoder_module, Transformer
+from transformiloop.src.models.model_blocks import build_encoder_module, Transformer, get_cnn_embedder
 
 
 class TransformiloopPretrain(nn.Module):
@@ -91,7 +91,8 @@ class TransformiloopFinetune(nn.Module):
         if cnn_encoder is not None:
             self.cnn_encoder = cnn_encoder
         else:
-            self.cnn_encoder = build_encoder_module(config) if config['use_cnn_encoder'] else None
+            self.cnn_encoder, seq_len = get_cnn_embedder(config) if config['use_cnn_encoder'] else None
+            config['seq_len'] = seq_len
 
         # Transformer model which performs window-wise attention
         if transformer is not None:
@@ -110,7 +111,7 @@ class TransformiloopFinetune(nn.Module):
         # Classification head which performs classification 
         self.classifier = nn.Sequential(
             nn.Linear(config['d_model'], config['hidden_mlp'], device=config['device']),
-            nn.Tanh(),
+            nn.ReLU(),
             nn.Linear(config['hidden_mlp'], config['classes'], device=config['device'])
         )
     
@@ -120,9 +121,9 @@ class TransformiloopFinetune(nn.Module):
 
         # Encode windows using CNN based model
         if self.cnn_encoder is not None:
-            x = x.contiguous().view(-1, self.config['window_size']).unsqueeze(1)
+            # x = x.contiguous().view(-1, self.config['window_size']).unsqueeze(1)
             x = self.cnn_encoder(x)
-            x = x.view(batch_dim, seq_dim, -1)
+            # x = x.view(batch_dim, seq_dim, -1)
 
         # Copies first element of window over the whole window
         if self.config['duplicate_as_window']:

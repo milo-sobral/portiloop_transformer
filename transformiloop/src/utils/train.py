@@ -245,13 +245,16 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
     if task is None:
         raise AttributeError("Task must be specified.")
     elif task == 'spindles':
+        config['classes'] = 2
         dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
         train_dl, val_dl, _ = get_dataloaders(config, dataset_path)
     elif task == 'sleep_stages': 
+        config['classes'] = 5
         dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
         MASS_dir = dataset_path / 'MASS_preds'
         train_dl, val_dl = get_dataloaders_sleep_stage(MASS_dir, dataset_path, config)
     elif task == 'spindle_trains':
+        config['classes'] = 4
         dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
         MASSdataset_path = dataset_path / 'MASS_preds'
         train_dl, val_dl = get_dataloaders_spindle_trains(MASSdataset_path, dataset_path, config)

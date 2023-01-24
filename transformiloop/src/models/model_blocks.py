@@ -561,6 +561,40 @@ class FullAttention(nn.Module):
         return V.contiguous()
 
 
+class PatchEmbedding(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+
+        # Flattens the input sequence to a 2D tensor 
+        self.flattener = nn.Flatten() 
+
+        self.shallownet = nn.Sequential(
+            nn.Conv1d(1, config['d_model'], config['conv_ker_size'], stride=config['conv_ker_size']//2),
+            nn.BatchNorm1d(config['d_model']),
+            nn.ELU(),
+            nn.AvgPool1d(config['pool_ker_size'], stride=config['pool_ker_size']//10),  # pooling acts as slicing to obtain 'patch' along the time dimension as in ViT
+            nn.Dropout(config['dropout']),
+        )
+
+    def forward(self, x):
+        # x -> (batch_size, seq_len, window_size)
+        x = self.flattener(x).unsqueeze(1) # x -> (batch_size, 1, seq_len*window_size)
+        x = self.shallownet(x) # x -> (batch_size, num_channels, seq_len)
+        # Invert the last two dimensions
+        x = x.permute(0, 2, 1) # x -> (batch_size, seq_len, num_channels)
+        return x
+
+
+# get cnn encoder
+def get_cnn_embedder(config):
+    """
+    This function generates the CNN encoder and returns the sequence length for the transformer encoder
+    """
+    cnn_embedder = PatchEmbedding(config)
+    test = torch.rand(config['batch_size'], config['seq_len'], config['window_size'])
+    seq_len = cnn_embedder(test).size(1)
+    return cnn_embedder, seq_len
+
 def build_encoder_module(config):
     # Checking if verification of CNN layers' dimensions has been previously done
     model = nn.Sequential()

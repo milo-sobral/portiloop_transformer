@@ -18,15 +18,15 @@ def initialize_config(name):
 
 DEFAULT_CONFIG = {
     # Data params
-    'batch_size' : 128,
-    'seq_len': 64,
-    'window_size': 64,
-    'seq_stride': 64,
+    'batch_size' : 200,
+    'seq_len': 30,
+    'window_size': 250,
+    'seq_stride': 250,
     'network_stride': 20,
     'max_val_batches': 1000,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
-    'embedding_size': 512,
+    'embedding_size': 64,
     'full_transformer': False,
     'pretraining': False,
     'modif_ratio': 0.5, 
@@ -41,13 +41,13 @@ DEFAULT_CONFIG = {
     'latent_dim': 32,
     'q_dim': 32,
     'v_dim': 32,
-    'encoding_type': EncodingTypes.POSITIONAL_ENCODING,
+    'encoding_type': EncodingTypes.NO_ENCODING,
     'normalization': True,
     'final_norm': True,
 
     # CNN Params:
-    'use_cnn_encoder': False,
-    'cnn_num_layers': 3,
+    'use_cnn_encoder': True,
+    'cnn_num_layers': 1,
     'cnn_in_channels': 1,
     'cnn_channels_multiplier': 4,
     'cnn_kernel_size': 4,
@@ -61,8 +61,12 @@ DEFAULT_CONFIG = {
     'min_output_size': 64,
     'cnn_linear_size': -1,
 
+    # Real CNN Params
+    'conv_ker_size': 50,
+    'pool_ker_size': 25,
+
     # Classifier_params
-    'hidden_mlp': 256,
+    'hidden_mlp': 64,
     'use_last': False,
 
     # Training params
@@ -83,7 +87,7 @@ DEFAULT_CONFIG = {
     'freeze_pretrained': False,
     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
     'lr_step_size': 10000,
-    'lr_gamma': 0.5,
+    'lr_gamma': 0.9,
 
     # Pretraining data 
     'max_val_num': 3000,

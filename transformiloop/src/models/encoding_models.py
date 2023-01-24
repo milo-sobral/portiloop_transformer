@@ -11,6 +11,7 @@ import torch.nn.functional as F
 class EncodingTypes(Enum):
     POSITIONAL_ENCODING = 1
     ONE_HOT_ENCODING = 2
+    NO_ENCODING = 3
 
 
 def pad_one_hot(input):
@@ -44,6 +45,8 @@ class PositionalEncoder(nn.Module):
                 x = torch.cat((x, self.one_hot_tensor_test[:, :x.size(1), :]), -1)
             else:
                 raise ValueError("Missing batch size in one hot encoding.")
+        elif self.encoding_type == EncodingTypes.NO_ENCODING:
+            pass
         return x
 
     def generate_one_hot_vecs(self):
