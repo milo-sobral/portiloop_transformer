@@ -19,7 +19,8 @@ from transformiloop.src.data.pretraining import PretrainingDataset
 from transformiloop.src.data.sleep_stage import get_dataloaders_sleep_stage
 from transformiloop.src.data.spindle_detection import get_dataloaders
 from transformiloop.src.data.spindle_trains import get_dataloaders_spindle_trains
-from transformiloop.src.models.transformers import ClassificationTransformer, TransformiloopFinetune, TransformiloopPretrain
+from transformiloop.src.models.model_blocks import GRUClassifier
+from transformiloop.src.models.transformers import TransformiloopFinetune, TransformiloopPretrain
 from transformiloop.src.utils.configs import fill_config, initialize_config, validate_config
 
 from transformiloop.src.utils.train_utils import (WandBLogger, finetune_epoch,
@@ -137,7 +138,7 @@ def pretrain(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
             raise e
 
 
-def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=False, task=None, pretrained_model=None):
+def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=False, task=None, pretrained_model=None, model_type="transformer"):
 
     if pretrained_model is not None:
         os.environ['WANDB_API_KEY'] = "cd105554ccdfeee0bbe69c175ba0c14ed41f6e00"  # TODO insert my own key
@@ -216,8 +217,22 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
                 raise AttributeError("Cannot restore without WandB.")
             wandb_run = None
         
+        # Set the num of classes according to the task
+        if task is None:
+            raise AttributeError("Task must be specified.")
+        elif task == 'spindles':
+            config['classes'] = 2
+        elif task == 'sleep_stages': 
+            config['classes'] = 5
+        elif task == 'spindle_trains':
+            config['classes'] = 4
+        
         # Initialize the model
-        model = TransformiloopFinetune(config)
+        config['model_type'] = model_type
+        if model_type == "transformer":
+            model = TransformiloopFinetune(config)
+        elif model_type == "lstm":
+            model = GRUClassifier(config)
         if restore:
             model_state_dict = model_dict['model']
             model_state_dict = {k: v for k, v in model_state_dict.items() if "transformer.positional_encoder.pos_encoder.pe" != k}
@@ -245,16 +260,13 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
     if task is None:
         raise AttributeError("Task must be specified.")
     elif task == 'spindles':
-        config['classes'] = 2
         dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
         train_dl, val_dl, _ = get_dataloaders(config, dataset_path)
     elif task == 'sleep_stages': 
-        config['classes'] = 5
         dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
         MASS_dir = dataset_path / 'MASS_preds'
         train_dl, val_dl = get_dataloaders_sleep_stage(MASS_dir, dataset_path, config)
     elif task == 'spindle_trains':
-        config['classes'] = 4
         dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
         MASSdataset_path = dataset_path / 'MASS_preds'
         train_dl, val_dl = get_dataloaders_spindle_trains(MASSdataset_path, dataset_path, config)
@@ -311,7 +323,7 @@ def run(config, wandb_group, wandb_project, save_model, unique_name, initial_val
     # pretraining_loader = data_generator(pretraining_data_path, config)
 
     # Load models
-    classifier = ClassificationTransformer(config)
+    classifier = TransformiloopFinetune(config)
     print(summary(
         classifier,
         input_size=[
@@ -493,6 +505,11 @@ if __name__ == "__main__":
     parser.add_argument('-g', '--wandb_group', type=str, default='DEFAULT_GROUP', help='Name of the WandB group (default: DEFAULT_GROUP)')
     parser.add_argument('--wandb_project', type=str, default='Portiloop', help='Name of the WandB project (default: Portiloop)')
 
+    # Group for the model type
+    group_4 = parser.add_mutually_exclusive_group()
+    group_4.add_argument('--transformer', action='store_true', default=False, help='Use a Transformer based model')
+    group_4.add_argument('--lstm', action='store_true', default=False, help='Use a LSTM based model')
+
     args = parser.parse_args()
     
     # Check if the experiment name is valid
@@ -529,8 +546,15 @@ if __name__ == "__main__":
     else:
         pretrained_dict = None
 
+    if not args.lstm and not args.transformer:
+        model_type = None
+    elif args.lstm:
+        model_type = 'lstm'
+    elif args.transformer:
+        model_type = 'transformer'
+
     if args.finetune:
-        finetune(args.wandb_group, args.wandb_project, args.experiment_name, log_wandb=args.log_wandb, restore=args.restore, task=task, pretrained_model=pretrained_dict)
+        finetune(args.wandb_group, args.wandb_project, args.experiment_name, log_wandb=args.log_wandb, restore=args.restore, task=task, pretrained_model=pretrained_dict, model_type=model_type)
     elif args.pretrain:
         pretrain(args.wandb_group, args.wandb_project, args.experiment_name, log_wandb=args.log_wandb, restore=args.restore)
     else:

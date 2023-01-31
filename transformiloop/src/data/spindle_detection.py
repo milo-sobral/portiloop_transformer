@@ -115,7 +115,10 @@ class FinetuneDataset(Dataset):
                 assert label_unique == label_history[-1], f"bad label: {label_unique} != {label_history[-1]}"
             label = label_history if self.label_history else label_unique
 
+        assert label in [0, 1], f"Invalid label: {label}"
+        label = label.type(torch.LongTensor)
         return x_data, label
+        
 
     def is_spindle(self, idx):
         assert 0 <= idx <= len(self), f"Index out of range ({idx}/{len(self)})."

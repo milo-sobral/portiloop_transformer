@@ -18,15 +18,14 @@ def initialize_config(name):
 
 DEFAULT_CONFIG = {
     # Data params
-    'batch_size' : 200,
-    'seq_len': 30,
-    'window_size': 250,
-    'seq_stride': 250,
+    'batch_size' : 64,
+    'seq_len': 50,
+    'window_size': 54,
+    'seq_stride': 42,
     'network_stride': 20,
     'max_val_batches': 1000,
     'batches_per_epoch': 500,
     'duplicate_as_window': False,
-    'embedding_size': 64,
     'full_transformer': False,
     'pretraining': False,
     'modif_ratio': 0.5, 
@@ -34,10 +33,12 @@ DEFAULT_CONFIG = {
     'batch_size_test': 256,
 
     # Transformers Params 
-    'd_model': 64,
+    'd_model': 32,
+    'embedding_size': 32,
+
     'n_heads': 8,
     'dim_ff': 256,
-    'n_layers': 1,
+    'n_layers': 6,
     'latent_dim': 32,
     'q_dim': 32,
     'v_dim': 32,
@@ -47,19 +48,23 @@ DEFAULT_CONFIG = {
 
     # CNN Params:
     'use_cnn_encoder': True,
-    'cnn_num_layers': 1,
+    'cnn_num_layers': 3,
     'cnn_in_channels': 1,
-    'cnn_channels_multiplier': 4,
-    'cnn_kernel_size': 4,
+    'cnn_channels': 31,
+    'cnn_kernel_size': 7,
     'cnn_stride_conv': 1,
-    'cnn_padding': 1,
+    'cnn_padding': 0,
     'cnn_dilation': 1,
-    'pool_kernel_size': 4,
+    'pool_kernel_size': 7,
     'pool_stride_conv': 1,
-    'pool_padding': 1,
+    'pool_padding': 0,
     'pool_dilation': 1, 
     'min_output_size': 64,
     'cnn_linear_size': -1,
+    
+    # GRU LSTM params
+    'gru_hidden_size': 7,
+    'gru_num_layers': 1,
 
     # Real CNN Params
     'conv_ker_size': 50,
@@ -96,7 +101,7 @@ DEFAULT_CONFIG = {
     'es_delta': 0.01,
     'reconstruction_dim': 64,
     'epoch_length': -1,
-    'classes': 5,
+    'classes': 2,
 
     # Masking params
     'ratio_masked': 0.3,
@@ -344,7 +349,7 @@ def check_valid_cnn(config):
     l_out = config['window_size']
     channels = config['cnn_in_channels']
     for _ in range(config['cnn_num_layers']):
-        channels = config['cnn_channels_multiplier'] * channels
+        channels = config['cnn_channels']
         l_out = out_dim(l_out, config['cnn_padding'], config['cnn_dilation'], config['cnn_kernel_size'], config['cnn_stride_conv'])
         l_out = out_dim(l_out, config['pool_padding'], config['pool_dilation'], config['pool_kernel_size'], config['pool_stride_conv'])
     
