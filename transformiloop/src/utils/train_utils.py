@@ -247,6 +247,72 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
     return metrics
 
 
+def finetune_test_epoch_lstm(dataloader, config, classifier, device, wandb_run, epoch):
+    with torch.no_grad():
+        
+        classifier.eval()
+
+        all_preds = []
+        all_targets = []
+        total_loss = []
+
+        classification_criterion = nn.BCEWithLogitsLoss()
+
+        for batch_idx, batch in enumerate(dataloader):
+            
+            # Stop early if we want to set a maximum validation length (usually for testing)
+            if batch_idx > config['max_val_batches'] and config['max_val_batches'] != -1:
+                break
+
+            # Logging every x batches
+            if batch_idx % config['log_every'] == 0:
+                logging.debug(f"Validation batch {batch_idx}")
+                print(f"Validation batch {batch_idx}")
+
+            if batch_idx == 0:
+                h = torch.zeros((config['gru_num_layers'], config['batch_size_validation'], config['gru_hidden_size']))
+
+            # Run through model
+            loss, predictions, _, h = simple_run_finetune_batch(batch, classifier, classification_criterion, config, device, False, history=h)
+
+            if predictions is not None:
+                all_preds.append(predictions.detach().cpu())
+                all_targets.append(batch[1].detach())
+                total_loss.append(loss.cpu().item())
+
+        predictions = torch.flatten(torch.stack(all_preds, dim=0)).cpu()
+        targets = torch.flatten(torch.stack(all_targets, dim=0)).cpu()
+
+        if config['classes'] == 4:
+            target_names = SpindleTrainDataset.get_labels()
+        elif config['classes'] == 5:
+            target_names = SleepStageDataset.get_labels()[:-1]
+        else:
+            target_names = ["No Spindle", "Spindle"]
+        metrics = classification_report(
+            targets, 
+            predictions, 
+            labels=list(range(config['classes'])), 
+            target_names=target_names,
+            output_dict=True)
+        # Add "val/" to the key of all the metrics
+        metrics = {f"val/{key}": value for key, value in metrics.items()}
+            
+    metrics['val/loss'] = torch.tensor(total_loss).mean().cpu().item()
+    metrics['epoch'] = epoch
+    if wandb_run is not None:
+        # Add the confusion matrix to the metrics
+        metrics['val/conf_mat'] = wandb.plot.confusion_matrix(
+            probs=None,
+            y_true=targets.tolist(),
+            preds=predictions.tolist(),
+            class_names=target_names,
+        )
+        wandb_run.log(metrics)
+
+    return metrics
+
+
 def finetune_test_epoch(dataloader, config, classifier, device, wandb_run, epoch):
     with torch.no_grad():
         
@@ -287,34 +353,7 @@ def finetune_test_epoch(dataloader, config, classifier, device, wandb_run, epoch
 
         predictions = torch.flatten(torch.stack(all_preds, dim=0)).cpu()
         targets = torch.flatten(torch.stack(all_targets, dim=0)).cpu()
-        # if config['classes'] > 2:
-        #     metrics = classification_report(
-        #         targets, 
-        #         predictions, 
-        #         labels=list(range(config['classes'])), 
-        #         target_names=SpindleTrainDataset.get_labels() if config['classes'] == 4 else SleepStageDataset.get_labels()[:-1],
-        #         output_dict=True)
-        #     # Add "val/" to the key of all the metrics
-        #     metrics = {f"val/{key}": value for key, value in metrics.items()}
-        # else:
-        #     metrics = classification_report(
-        #         targets, 
-        #         predictions, 
-        #         labels=list(range(config['classes'])), 
-        #         target_names=["No Spindle", "Spindle"],
-        #         output_dict=False)
-        #     print(metrics)
-        #     # Add the loss to the metrics
-        #     acc, f1, recall, precision, cm = compute_metrics(torch.stack(
-        #         all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).unsqueeze(-1).to(device))
-        #     metrics = {
-        #         'val/accuracy': acc,
-        #         'val/F1': f1,
-        #         'val/recall': recall,
-        #         'val/precision': precision,
-        #         'val/conf_mat': cm
-        #     }
-        #     print(metrics)
+
         if config['classes'] == 4:
             target_names = SpindleTrainDataset.get_labels()
         elif config['classes'] == 5:
@@ -364,6 +403,8 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device, training,
     seqs = seqs.to(device)
     labels = labels.to(device)
 
+    hidden_lstm = None
+
     # Call model with accumulated sequence and history
     inferred = True
     if config['full_transformer']:
@@ -380,7 +421,7 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device, training,
         if config['model_type'] == 'transformer':
             logits = classifier(seqs, None)
         elif config['model_type'] == 'lstm':
-            logits, _ = classifier(seqs, None)
+            logits, hidden_lstm = classifier(seqs, history)
 
     # If we have performed inference, get predictions and loss and return them
     if inferred:
@@ -391,10 +432,10 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device, training,
             predictions = torch.argmax(logits, dim=-1)
         else:
             predictions = (torch.sigmoid(logits) > config['threshold']).int()
-        return loss, predictions, seqs
+        return loss, predictions, seqs, hidden_lstm
 
     # We return None otherwise
-    return None, None, seqs
+    return None, None, seqs, None
 
 
 def plot_grad_flow(named_parameters):

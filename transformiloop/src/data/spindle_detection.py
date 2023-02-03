@@ -275,12 +275,12 @@ def get_dataloaders(config, dataset_path):
     print(f"Batch Size validation: {batch_size_val}")
     print(f"Batch Size test: {batch_size_test}")
 
-    if config['full_transformer']:
-        val_sampler = ValidationSampler(config['seq_stride'], nb_segment_val, config['network_stride'])
-        test_sampler = ValidationSampler(config['seq_stride'], nb_segment_test, config['network_stride'])
-    else:
-        val_sampler = ValidationSamplerSimple(val_ds, config['network_stride'])
-        test_sampler = ValidationSamplerSimple(test_ds, config['network_stride'])
+    # if config['full_transformer']:
+    val_sampler = ValidationSampler(config['seq_stride'], nb_segment_val, config['network_stride'])
+    test_sampler = ValidationSampler(config['seq_stride'], nb_segment_test, config['network_stride'])
+    # else:
+    #     val_sampler = ValidationSamplerSimple(val_ds, config['network_stride'])
+    #     test_sampler = ValidationSamplerSimple(test_ds, config['network_stride'])
     
     if config['pretraining']:
         train_dl = DataLoader(

@@ -1,34 +1,27 @@
+import pathlib
+import time
 from transformiloop.src.models.transformers import TransformiloopFinetune
 from transformiloop.src.utils.configs import initialize_config
 from transformiloop.src.models.model_blocks import GRUClassifier
 import torch.nn as nn
 from torchinfo import summary
 import torch
+from transformiloop.src.utils.train_utils import finetune_test_epoch_lstm
+from transformiloop.src.data.spindle_detection import get_dataloaders
 
 
-config = initialize_config('Test')
-lstm_classifier = GRUClassifier(config).cuda()
-transformer_classifier = TransformiloopFinetune(config).cuda()
 
-# print(summary(
-#     lstm_classifier, 
-#     input_size=[
-#         (config['batch_size'], config['seq_len'], config['window_size']),
-#         (config['gru_num_layers'], config['batch_size'], config['gru_hidden_size'])]
-#         ))
+config = initialize_config("test")
+config['model_type'] = "lstm"
+model = GRUClassifier(config)
+model = model.to(config['device'])
+print(config['device'])
 
-loss = nn.CrossEntropyLoss()
+dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
+_, val_dl, _ = get_dataloaders(config, dataset_path)
 
-# Get a batch of data
-x = torch.rand((config['batch_size'], config['seq_len'], config['window_size'])).cuda()
+start = time.time()
+finetune_test_epoch_lstm(val_dl, config, model, config['device'], None, 0)
+end = time.time()
 
-logits_lstm, _ = lstm_classifier(x, None)
-# logits_transformer = transformer_classifier(x, None)
-# Get a random target of zeros and ones in a long Tensor
-targets = torch.randint(low=0, high=2, size=(config['batch_size'], 1), dtype=torch.float).cuda() 
-
-loss_lstm = loss(logits_lstm, targets)
-# loss_transformer = loss(logits_transformer.cpu(), torch.zeros((config['batch_size'], 1)))
-
-loss_lstm.backward()
-# loss_transformer.backward()
+print(f"Finished validation epoch in {end - start} seconds")
