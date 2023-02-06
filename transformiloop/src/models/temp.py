@@ -17,11 +17,11 @@ model = GRUClassifier(config)
 model = model.to(config['device'])
 print(config['device'])
 
-dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
-_, val_dl, _ = get_dataloaders(config, dataset_path)
+# dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
+# _, val_dl, _ = get_dataloaders(config, dataset_path)
 
-start = time.time()
-finetune_test_epoch_lstm(val_dl, config, model, config['device'], None, 0)
-end = time.time()
+# start = time.time()
+# finetune_test_epoch_lstm(val_dl, config, model, config['device'], None, 0)
+# end = time.time()
 
-print(f"Finished validation epoch in {end - start} seconds")
+# print(f"Finished validation epoch in {end - start} seconds")

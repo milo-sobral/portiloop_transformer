@@ -163,7 +163,7 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
             logging.debug(f"Training batch {batch_idx}")
             print(f"Training batch {batch_idx}")
 
-        loss, predictions, _ = simple_run_finetune_batch(batch, classifier, classification_criterion, config, device, True)
+        loss, predictions, _, _ = simple_run_finetune_batch(batch, classifier, classification_criterion, config, device, True)
 
         # Optimize parameters
         loss.backward()
@@ -342,7 +342,7 @@ def finetune_test_epoch(dataloader, config, classifier, device, wandb_run, epoch
                 history = torch.zeros((batch[0].size(0), config['seq_len']-1)).to(device)
 
             # Run through model
-            loss, predictions, seqs = simple_run_finetune_batch(batch, classifier, classification_criterion, config, device, False, seqs=seqs, history=history)
+            loss, predictions, seqs, _ = simple_run_finetune_batch(batch, classifier, classification_criterion, config, device, False, seqs=seqs, history=history)
 
             if predictions is not None:
                 history = history[:, 1:]
