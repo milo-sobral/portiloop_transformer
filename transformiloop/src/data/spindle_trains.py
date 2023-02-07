@@ -1,8 +1,10 @@
 from copy import deepcopy
 import json
 import os
+import pathlib
 import random
 import numpy as np
+import pandas as pd
 import pyedflib
 import csv
 from torch.utils.data import Dataset, DataLoader, Sampler
@@ -10,6 +12,65 @@ import torch
 from transformiloop.src.data.pretraining import read_pretraining_dataset
 from torch.utils.data.sampler import WeightedRandomSampler
 
+
+def generate_spindle_trains_dataset(raw_dataset_path, output_file, electrode='Cz'):
+    "Constructs a dataset of spindle trains from the MASS dataset"
+    data = {}
+
+    spindle_infos = os.listdir(os.path.join(raw_dataset_path, "spindle_info"))
+
+    # List all files in the subject directory
+    for subject_dir in os.listdir(os.path.join(raw_dataset_path, "subject_info")):
+        subset = subject_dir[5:8]
+        # Get the spindle info file where the subset is in the filename
+        spindle_info_file = [f for f in spindle_infos if subset in f and electrode in f][0]
+
+        # Read the spindle info file
+        train_ds_ss = read_spindle_train_info(\
+            os.path.join(raw_dataset_path, "subject_info", subject_dir), \
+                os.path.join(raw_dataset_path, "spindle_info", spindle_info_file))
+        
+        # Append the data
+        data.update(train_ds_ss)
+
+    return data
+
+def read_spindle_train_info(subject_dir, spindle_info_file):
+    """
+    Read the spindle train info from the given subject directory and spindle info file
+    """
+    subject_names = pd.read_csv(subject_dir, header=None).to_numpy()[:, 0]
+    spindle_info = pd.read_csv(spindle_info_file)
+    headers = list(spindle_info.columns)[:-1]
+
+    data = {}
+    for subj in subject_names:
+        data[subj] = {
+            headers[0]: [],
+            headers[1]: [],
+            headers[2]: [],
+        }
+    subject_counter = 1
+    for index, row in spindle_info.iterrows():
+        if index != 0 and row['onsets'] < spindle_info.iloc[index-1]['onsets']:
+            print(index)
+            subject_counter += 1
+    
+    assert subject_counter == len(subject_names), \
+        f"The number of subjects in the subject_info file and the spindle_info file should be the same, \
+            found {len(subject_names)} and {subject_counter} respectively"
+
+    subject_names_counter = 0
+    for index, row in spindle_info.iterrows():
+        if index != 0 and row['onsets'] < spindle_info.iloc[index-1]['onsets']:
+            subject_names_counter += 1
+        for h in headers:
+            data[subject_names[subject_names_counter]][h].append(row[h])
+
+    for subj in subject_names:
+        assert len(data[subj][headers[0]]) == len(data[subj][headers[1]]) == len(data[subj][headers[2]]), "The number of onsets, offsets and labels should be the same"
+
+    return data
 
 def get_dataloaders_spindle_trains(MASS_dir, ds_dir, config):
     """
@@ -179,3 +240,9 @@ class SpindleTrainDataset(Dataset):
 
     def __len__(self):
         return len(self.full_signal) - self.window_size
+
+
+if __name__ == "__main__":
+    # Get the path to the dataset directory
+    dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
+    generate_spindle_trains_dataset(dataset_path / 'SpindleTrains_raw_data', None)

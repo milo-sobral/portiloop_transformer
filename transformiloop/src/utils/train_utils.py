@@ -187,34 +187,7 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
     with torch.no_grad():
         predictions = torch.flatten(torch.stack(all_preds, dim=0)).cpu()
         targets = torch.flatten(torch.stack(all_targets, dim=0)).cpu()
-        # if config['classes'] > 2:
-        #     metrics = classification_report(
-        #         targets, 
-        #         predictions, 
-        #         labels=list(range(config['classes'])), 
-        #         target_names=SpindleTrainDataset.get_labels() if config['classes'] == 4 else SleepStageDataset.get_labels()[:-1],
-        #         output_dict=True)
-        #     # Add "val/" to the key of all the metrics
-        #     metrics = {f"train/{key}": value for key, value in metrics.items()}
-        #     # Add the confusion matrix to the metrics
-        # else:
-        #     metrics = classification_report(
-        #         targets, 
-        #         predictions, 
-        #         labels=list(range(config['classes'])), 
-        #         target_names=["No Spindle", "Spindle"],
-        #         output_dict=False)
-        #     print(metrics)
-        #     acc, f1, recall, precision, cm = compute_metrics(torch.stack(
-        #         all_preds, dim=0).to(device), torch.stack(all_targets, dim=0).unsqueeze(-1).to(device))
-        #     metrics = {
-        #         'train/accuracy': acc,
-        #         'train/F1': f1,
-        #         'train/recall': recall,
-        #         'train/precision': precision,
-        #         'train/conf_mat': cm
-        #     }
-        #     print(metrics)
+
         if config['classes'] == 4:
             target_names = SpindleTrainDataset.get_labels()
         elif config['classes'] == 5:
