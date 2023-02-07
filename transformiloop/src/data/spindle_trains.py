@@ -33,7 +33,10 @@ def generate_spindle_trains_dataset(raw_dataset_path, output_file, electrode='Cz
         # Append the data
         data.update(train_ds_ss)
 
-    return data
+    # Write the data to a json file
+    with open(output_file, 'w') as f:
+        json.dump(data, f)
+
 
 def read_spindle_train_info(subject_dir, spindle_info_file):
     """
@@ -118,12 +121,11 @@ class EquiRandomSampler(Sampler):
         self.ratio_spindles = ratio
 
     def __iter__(self):
-        # Check that self.full_labels and self.dataset.full_labels are the same
         while True:
             # Get a random between 0 and 1
             next_label = random.random()
             if next_label < self.ratio_spindles:
-                yield 0
+                yield 0 # sample from the spindles
             else:
                 yield 1
             
@@ -245,4 +247,4 @@ class SpindleTrainDataset(Dataset):
 if __name__ == "__main__":
     # Get the path to the dataset directory
     dataset_path = pathlib.Path(__file__).parents[2].resolve() / 'dataset'
-    generate_spindle_trains_dataset(dataset_path / 'SpindleTrains_raw_data', None)
+    generate_spindle_trains_dataset(dataset_path / 'SpindleTrains_raw_data', dataset_path / 'spindle_trains_annots.json')

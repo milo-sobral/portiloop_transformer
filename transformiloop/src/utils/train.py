@@ -25,7 +25,7 @@ from transformiloop.src.utils.configs import fill_config, initialize_config, val
 
 from transformiloop.src.utils.train_utils import (WandBLogger, finetune_epoch,
                                                   finetune_test_epoch,
-                                                  WarmupTransformerLR, pretrain_epoch)
+                                                  WarmupTransformerLR, finetune_test_epoch_lstm, pretrain_epoch)
 
 
 def pretrain(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=False):
@@ -246,7 +246,7 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
     optimizer = optim.AdamW(
         model.parameters(),
         lr=config["lr"],
-        betas=config["betas"]
+        weight_decay=config["weight_decay"],
     )
     if restore:
         optimizer.load_state_dict(model_dict['optimizer'])
@@ -285,7 +285,10 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
                 wandb_run,
                 epoch
             )
-            val_metrics = finetune_test_epoch(
+
+            # Run the validation
+            testing_method = finetune_test_epoch if model_type == "transformer" else finetune_test_epoch_lstm
+            val_metrics = testing_method(
                 val_dl,
                 config,
                 model,

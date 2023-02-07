@@ -635,6 +635,9 @@ class GRUClassifier(nn.Module):
         # Pass the output of the GRU through the classifier
         x = self.classifier(x[:, -1, :])
 
+        # Pass through a sigmoid 
+        x = torch.sigmoid(x)
+
         return x, h
 
 

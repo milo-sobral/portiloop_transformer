@@ -1,3 +1,4 @@
+import time
 import torch
 import numpy as np
 import torch.nn as nn
@@ -149,7 +150,9 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
     if config['classes'] > 2:
         classification_criterion = nn.CrossEntropyLoss()
     else:
-        classification_criterion = nn.BCEWithLogitsLoss()
+        classification_criterion = nn.BCELoss(reduction='none')
+
+    start = time.time()
 
     for batch_idx, batch in enumerate(dataloader):
 
@@ -165,16 +168,18 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
 
         loss, predictions, _, _ = simple_run_finetune_batch(batch, classifier, classification_criterion, config, device, True)
 
+        loss = loss.mean()
+
         # Optimize parameters
         loss.backward()
-        nn.utils.clip_grad_value_(classifier.parameters(), config['clip'])
+        # nn.utils.clip_grad_value_(classifier.parameters(), config['clip'])
 
         if batch_idx == 0:
             plot_gradients = plot_grad_flow(classifier.cpu().named_parameters())
         classifier = classifier.to(device)
 
         classifier_optim.step()
-        scheduler.step()
+        # scheduler.step()
 
         with torch.no_grad():
             all_preds.append(predictions.detach().cpu())
@@ -217,6 +222,9 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
         )
         wandb_run.log(metrics)
 
+    end = time.time()
+    logging.debug(f"Training took {end - start} seconds")
+
     return metrics
 
 
@@ -229,8 +237,9 @@ def finetune_test_epoch_lstm(dataloader, config, classifier, device, wandb_run, 
         all_targets = []
         total_loss = []
 
-        classification_criterion = nn.BCEWithLogitsLoss()
+        classification_criterion = nn.BCELoss(reduction='none')
 
+        start = time.time()
         for batch_idx, batch in enumerate(dataloader):
             
             # Stop early if we want to set a maximum validation length (usually for testing)
@@ -243,10 +252,12 @@ def finetune_test_epoch_lstm(dataloader, config, classifier, device, wandb_run, 
                 print(f"Validation batch {batch_idx}")
 
             if batch_idx == 0:
-                h = torch.zeros((config['gru_num_layers'], config['batch_size_validation'], config['gru_hidden_size']))
+                h = torch.zeros((config['gru_num_layers'], config['batch_size_validation'], config['gru_hidden_size']), device=device)
 
             # Run through model
             loss, predictions, _, h = simple_run_finetune_batch(batch, classifier, classification_criterion, config, device, False, history=h)
+
+            loss = loss.mean()
 
             if predictions is not None:
                 all_preds.append(predictions.detach().cpu())
@@ -282,6 +293,9 @@ def finetune_test_epoch_lstm(dataloader, config, classifier, device, wandb_run, 
             class_names=target_names,
         )
         wandb_run.log(metrics)
+
+    end = time.time()
+    logging.debug(f"Validation took {end - start} seconds")
 
     return metrics
 
@@ -404,7 +418,7 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device, training,
         if config['classes'] > 2:
             predictions = torch.argmax(logits, dim=-1)
         else:
-            predictions = (torch.sigmoid(logits) > config['threshold']).int()
+            predictions = (logits > config['threshold']).int()
         return loss, predictions, seqs, hidden_lstm
 
     # We return None otherwise

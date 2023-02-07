@@ -18,13 +18,13 @@ def initialize_config(name):
 
 DEFAULT_CONFIG = {
     # Data params
-    'batch_size' : 64,
+    'batch_size' : 256,
     'seq_len': 50,
     'window_size': 54,
     'seq_stride': 42,
     'network_stride': 1,
     'max_val_batches': -1,
-    'batches_per_epoch': 500,
+    'batches_per_epoch': 1000,
     'duplicate_as_window': False,
     'full_transformer': False,
     'pretraining': False,
@@ -76,6 +76,7 @@ DEFAULT_CONFIG = {
 
     # Training params
     'max_duration': int(71.5 * 3600),
+    'data_threshold': 0.2, # Threshold for the dataset
     'threshold': 0.5, 
     'lr': 0.0005,
     'betas': (0.9, 0.99),
@@ -93,6 +94,7 @@ DEFAULT_CONFIG = {
     'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
     'lr_step_size': 10000,
     'lr_gamma': 1,
+    'weight_decay': 0.01,
 
     # Pretraining data 
     'max_val_num': 3000,

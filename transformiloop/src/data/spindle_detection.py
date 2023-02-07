@@ -65,7 +65,7 @@ class FinetuneDataset(Dataset):
         self.seq_len = 1 if config['full_transformer'] and not history else config['seq_len']  # want a single sample if full transformer and not training (aka validating), else we use seq len
         self.seq_stride = config['seq_stride']
         self.past_signal_len = self.seq_len * self.seq_stride
-        self.threshold = config['threshold']
+        self.threshold = config['data_threshold']
         self.label_history = history
 
         # Check if we are pretrining the model
