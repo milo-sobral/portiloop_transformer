@@ -3,6 +3,7 @@ import json
 import os
 import pathlib
 import random
+import time
 import numpy as np
 import pandas as pd
 import pyedflib
@@ -56,17 +57,28 @@ def read_spindle_train_info(subject_dir, spindle_info_file):
     subject_counter = 1
     for index, row in spindle_info.iterrows():
         if index != 0 and row['onsets'] < spindle_info.iloc[index-1]['onsets']:
-            print(index)
             subject_counter += 1
     
     assert subject_counter == len(subject_names), \
         f"The number of subjects in the subject_info file and the spindle_info file should be the same, \
             found {len(subject_names)} and {subject_counter} respectively"
 
+    def convert_row_to_250hz(row):
+        "Convert the row to 250hz"
+        row['onsets'] = int((row['onsets'] / 256) * 250)
+        row['offsets'] = int((row['offsets'] / 256) * 250)
+        if row['onsets'] == row['offsets']:
+            return None
+        assert row['onsets'] < row['offsets'], "The onset should be smaller than the offset"
+        return row
+
     subject_names_counter = 0
     for index, row in spindle_info.iterrows():
         if index != 0 and row['onsets'] < spindle_info.iloc[index-1]['onsets']:
             subject_names_counter += 1
+        row = convert_row_to_250hz(row)
+        if row is None:
+            continue
         for h in headers:
             data[subject_names[subject_names_counter]][h].append(row[h])
 
@@ -101,14 +113,14 @@ def get_dataloaders_spindle_trains(MASS_dir, ds_dir, config):
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=config['batch_size'],
-        sampler=EquiRandomSampler(),
+        sampler=EquiRandomSampler(train_dataset, sample_list=[1, 2]),
         pin_memory=True,
         drop_last=True
     )
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=config['batch_size_validation'],
-        sampler=EquiRandomSampler(),
+        sampler=EquiRandomSampler(test_dataset, sample_list=[1, 2]),
         pin_memory=True,
         drop_last=True
     )
@@ -117,27 +129,60 @@ def get_dataloaders_spindle_trains(MASS_dir, ds_dir, config):
 
 
 class EquiRandomSampler(Sampler):
-    def __init__(self, ratio=0.5):
-        self.ratio_spindles = ratio
+    def __init__(self, dataset, sample_list=[0, 1, 2, 3]):
+        """ 
+        ratio: list of ratios for each class [non-spindle, isolated, first, train]
+        """
+        self.sample_list = sample_list
+        self.dataset = dataset
+
+        self.isolated_index = 0
+        self.first_index = 0
+        self.train_index = 0
+
+        # Come up with a good maximum number of samples to take from the dataset
+        self.max_isolated_index = len(dataset.spindle_labels_iso)
+        self.max_first_index = len(dataset.spindle_labels_first)
+        self.max_train_index = len(dataset.spindle_labels_train)
 
     def __iter__(self):
         while True:
-            # Get a random between 0 and 1
-            next_label = random.random()
-            if next_label < self.ratio_spindles:
-                yield 0 # sample from the spindles
-            else:
-                yield 1
+            # Select a random class
+            class_choice = np.random.choice(self.sample_list)
+            if class_choice == 0:
+                # Sample from the rest of the signal
+                yield random.randint(0, len(self.dataset.full_signal) - self.dataset.min_signal_len - self.dataset.window_size)
+            elif class_choice == 1:
+                index = self.dataset.spindle_labels_iso[self.isolated_index]
+                self.isolated_index += 1
+                if self.isolated_index >= self.max_isolated_index:
+                    self.isolated_index = 0
+                assert index in self.dataset.spindle_labels_iso, "Spindle index not found in list"
+                yield index - self.dataset.past_signal_len - self.dataset.window_size + 1
+            elif class_choice == 2:
+                index = self.dataset.spindle_labels_first[self.first_index]
+                self.first_index += 1
+                if self.first_index >= self.max_first_index:
+                    self.first_index = 0
+                assert index in self.dataset.spindle_labels_first, "Spindle index not found in list"
+                yield index - self.dataset.past_signal_len - self.dataset.window_size + 1
+            elif class_choice == 3:
+                index = self.dataset.spindle_labels_train[self.train_index]
+                self.train_index += 1
+                if self.train_index >= self.max_train_index:
+                    self.train_index = 0
+                assert index in self.dataset.spindle_labels_train, "Spindle index not found in list"
+                yield index - self.dataset.past_signal_len - self.dataset.window_size + 1
             
     def __len__(self):
-        return len(self.dataset)
+        return len(self.dataset.full_signal)
 
 
 def read_spindle_trains_labels(ds_dir):
     '''
     Read the sleep_staging.csv file in the given directory and stores info in a dictionary
     '''
-    spindle_trains_file = os.path.join(ds_dir, 'spindle_train_annotations.json')
+    spindle_trains_file = os.path.join(ds_dir, 'spindle_trains_annots.json')
     # Read the json file
     with open(spindle_trains_file, 'r') as f:
         labels = json.load(f)
@@ -164,7 +209,9 @@ class SpindleTrainDataset(Dataset):
         # Get the sleep stage labels
         self.full_signal = []
         self.full_labels = []
-        self.spindle_labels = []
+        self.spindle_labels_iso = []
+        self.spindle_labels_first = []
+        self.spindle_labels_train = []
 
         accumulator = 0
         for subject in subjects:
@@ -178,39 +225,48 @@ class SpindleTrainDataset(Dataset):
 
             # Get all the labels for the given subject
             label = torch.zeros_like(signal, dtype=torch.uint8)
-            spindle_label = []
-            for (onset, offset, l) in zip(labels[subject]['onsets'], labels[subject]['offsets'], labels[subject]['labels_num']):
+            for index, (onset, offset, l) in enumerate(zip(labels[subject]['onsets'], labels[subject]['offsets'], labels[subject]['labels_num'])):
                 
+                # Some of the spindles in the dataset overlap with the previous spindle
+                # If that is the case, we need to make sure that the onset is at least the offset of the previous spindle
+                if onset < labels[subject]['offsets'][index - 1]:
+                    onset = labels[subject]['offsets'][index - 1]
+
                 label[onset:offset] = l
                 # Make a separate list with the indexes of all the spindle labels so that sampling is easier
                 to_add = list(range(accumulator + onset, accumulator + offset))
-                spindle_label += to_add
-
+                assert offset < len(signal), f"Offset {offset} is greater than the length of the signal {len(signal)} for subject {subject}"
+                if l == 1:
+                    self.spindle_labels_iso += to_add
+                elif l == 2:
+                    self.spindle_labels_first += to_add
+                elif l == 3:
+                    self.spindle_labels_train += to_add
+                else:
+                    raise ValueError(f"Unknown label {l} for subject {subject}")
             # increment the accumulator
             accumulator += len(signal)
 
             # Make sure that the signal and the labels are the same length
             assert len(signal) == len(label)
-            # # Make sure that there arent too many spindles labeled
-            # assert sum(torch.where(label != 0, 1, 0)) == len(spindle_label)
-            # assert sum(torch.where(label == 0, 1, 0)) + len(spindle_label) == len(signal), f"Too many spindles labeled for subject {subject}"
 
             # Add to full signal and full label
             self.full_labels.append(label)
             self.full_signal.append(signal)
-            self.spindle_labels += spindle_label
             del data[subject], signal, label
         
         # Concatenate the full signal and the full labels into one continuous tensor
         self.full_signal = torch.cat(self.full_signal)
         self.full_labels = torch.cat(self.full_labels)
 
-        # # Make sure that all indices in spindle_labels are indeed spindles in the signal
-        # assert all([self.full_labels[index_label] != 0 for index_label in self.spindle_labels]), "Issue with the spindle labels"
-        # # Make sure that the signal and the labels are the same length
-        # assert len(self.full_signal) == len(self.full_labels), "Issue with the data and the labels"
-        # # Make sure that the last spindle in the spindle_labels is in fact in the signal
-        # assert all([index_label < len(self.full_labels) for index_label in self.spindle_labels]), "Issue with the spindle labels"
+        # Shuffle the spindle labels
+        start = time.time()
+        random.shuffle(self.spindle_labels_iso)
+        random.shuffle(self.spindle_labels_first)
+        random.shuffle(self.spindle_labels_train)
+        end = time.time()
+        print(f"Shuffling took {end - start} seconds")
+        print(f"Number of spindle labels: {len(self.spindle_labels_iso) + len(self.spindle_labels_first) + len(self.spindle_labels_train)}")
 
 
     @staticmethod
@@ -218,15 +274,6 @@ class SpindleTrainDataset(Dataset):
         return ['non-spindle', 'isolated', 'first', 'train']
 
     def __getitem__(self, index):
-        # Get the signal and label at the given index
-        # If index is 0, sample from the spindle labels list
-        if index == 0:
-            index = random.choice(self.spindle_labels)
-            assert index in self.spindle_labels, "Spindle index not found in list"
-            index = index - self.past_signal_len - self.window_size + 1
-        else:
-            # Sample from the rest of the signal
-            index = random.randint(0, len(self.full_signal) - self.min_signal_len - self.window_size)
 
         # Get data
         index = index + self.past_signal_len
@@ -235,10 +282,12 @@ class SpindleTrainDataset(Dataset):
         label = self.full_labels[index + self.window_size - 1]
 
         # Make sure that the last index of the signal is the same as the label
-        assert signal[-1, -1] == self.full_signal[index + self.window_size - 1], "Issue with the data and the labels"
+        # assert signal[-1, -1] == self.full_signal[index + self.window_size - 1], "Issue with the data and the labels"
         label = label.type(torch.LongTensor)
 
-        return signal, label
+        assert label in [1, 2], f"Label {label} is not 1 or 2"
+
+        return signal, label-1
 
     def __len__(self):
         return len(self.full_signal) - self.window_size

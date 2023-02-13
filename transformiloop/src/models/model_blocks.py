@@ -610,6 +610,7 @@ class GRUClassifier(nn.Module):
         
         # Add the linear layer to the sequence to generate the final model
         self.classifier = nn.Linear(config['gru_hidden_size'], config['classes'] if config['classes'] > 2 else 1)
+        self.classes = config['classes']
 
     def forward(self, x, h):
         """
@@ -636,7 +637,8 @@ class GRUClassifier(nn.Module):
         x = self.classifier(x[:, -1, :])
 
         # Pass through a sigmoid 
-        x = torch.sigmoid(x)
+        if self.classes <= 2:
+            x = torch.sigmoid(x)
 
         return x, h
 

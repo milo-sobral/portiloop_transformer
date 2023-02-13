@@ -198,7 +198,8 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
         elif config['classes'] == 5:
             target_names = SleepStageDataset.get_labels()[:-1]
         else:
-            target_names = ["No Spindle", "Spindle"]
+            # target_names = ["No Spindle", "Spindle"]
+            target_names = ["Isolated", "First"]
         metrics = classification_report(
             targets, 
             predictions, 
@@ -272,7 +273,8 @@ def finetune_test_epoch_lstm(dataloader, config, classifier, device, wandb_run, 
         elif config['classes'] == 5:
             target_names = SleepStageDataset.get_labels()[:-1]
         else:
-            target_names = ["No Spindle", "Spindle"]
+            # target_names = ["No Spindle", "Spindle"]
+            target_names = ["Isolated", "First"]
         metrics = classification_report(
             targets, 
             predictions, 
@@ -325,15 +327,12 @@ def finetune_test_epoch(dataloader, config, classifier, device, wandb_run, epoch
                 logging.debug(f"Validation batch {batch_idx}")
                 print(f"Validation batch {batch_idx}")
 
-            if batch_idx == 0:
-                history = torch.zeros((batch[0].size(0), config['seq_len']-1)).to(device)
-
             # Run through model
             loss, predictions, seqs, _ = simple_run_finetune_batch(batch, classifier, classification_criterion, config, device, False, seqs=seqs, history=history)
 
             if predictions is not None:
-                history = history[:, 1:]
-                history = torch.cat([history, predictions], dim=1)
+                # history = history[:, 1:]
+                # history = torch.cat([history, predictions], dim=1)
                 all_preds.append(predictions.detach().cpu())
                 all_targets.append(batch[1].detach())
                 total_loss.append(loss.cpu().item())
@@ -346,7 +345,8 @@ def finetune_test_epoch(dataloader, config, classifier, device, wandb_run, epoch
         elif config['classes'] == 5:
             target_names = SleepStageDataset.get_labels()[:-1]
         else:
-            target_names = ["No Spindle", "Spindle"]
+             # target_names = ["No Spindle", "Spindle"]
+            target_names = ["Isolated", "First"]
         metrics = classification_report(
             targets, 
             predictions, 
@@ -416,7 +416,7 @@ def simple_run_finetune_batch(batch, classifier, loss, config, device, training,
             labels = labels.unsqueeze(-1).type(torch.FloatTensor).to(device)
         loss = loss(logits, labels)
         if config['classes'] > 2:
-            predictions = torch.argmax(logits, dim=-1)
+            predictions = torch.argmax(torch.log_softmax(logits), dim=-1)
         else:
             predictions = (logits > config['threshold']).int()
         return loss, predictions, seqs, hidden_lstm

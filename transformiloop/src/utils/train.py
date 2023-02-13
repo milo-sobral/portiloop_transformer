@@ -225,7 +225,7 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
         elif task == 'sleep_stages': 
             config['classes'] = 5
         elif task == 'spindle_trains':
-            config['classes'] = 4
+            config['classes'] = 2
         
         # Initialize the model
         config['model_type'] = model_type
@@ -287,7 +287,7 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
             )
 
             # Run the validation
-            testing_method = finetune_test_epoch if model_type == "transformer" else finetune_test_epoch_lstm
+            testing_method = finetune_test_epoch_lstm if model_type == "lstm" and task == "spindles" else finetune_test_epoch
             val_metrics = testing_method(
                 val_dl,
                 config,

@@ -1,5 +1,6 @@
 from copy import deepcopy
 import logging
+from pathlib import Path
 import time
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader, Sampler
@@ -21,9 +22,9 @@ def get_subject_list(config, dataset_path):
     p2_subject = pd.read_csv(os.path.join(dataset_path, 'subject_sequence_p2_big.txt'), header=None, delim_whitespace=True).to_numpy()
 
     # Get splits for train, validation and test
-    train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.8, random_state=None)
+    train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.9, random_state=None)
     test_subject_p1, validation_subject_p1 = train_test_split(validation_subject_p1, train_size=0.5, random_state=None)
-    train_subject_p2, validation_subject_p2 = train_test_split(p2_subject, train_size=0.8, random_state=None)
+    train_subject_p2, validation_subject_p2 = train_test_split(p2_subject, train_size=0.9, random_state=None)
     test_subject_p2, validation_subject_p2 = train_test_split(validation_subject_p2, train_size=0.5, random_state=None)
 
     # Get subject list depending on split
@@ -214,6 +215,55 @@ class ValidationSamplerSimple(Sampler):
         return self.len_max // self.dividing_factor
 
 
+class SignalDataset(Dataset):
+    def __init__(self, filename, path, window_size, fe, seq_len, seq_stride, list_subject, len_segment):
+        self.fe = fe
+        self.window_size = window_size
+        self.path_file = Path(path) / filename
+
+        self.data = pd.read_csv(self.path_file, header=None).to_numpy()
+        assert list_subject is not None
+        used_sequence = np.hstack([range(int(s[1]), int(s[2])) for s in list_subject])
+        split_data = np.array(np.split(self.data, int(len(self.data) / (len_segment + 30 * fe))))  # 115+30 = nb seconds per sequence in the dataset
+        split_data = split_data[used_sequence]
+        self.data = np.transpose(split_data.reshape((split_data.shape[0] * split_data.shape[1], 4)))
+
+        assert self.window_size <= len(self.data[0]), "Dataset smaller than window size."
+        self.full_signal = torch.tensor(self.data[0], dtype=torch.float)
+        self.full_envelope = torch.tensor(self.data[1], dtype=torch.float)
+        self.seq_len = seq_len  # 1 means single sample / no sequence ?
+        self.idx_stride = seq_stride
+        self.past_signal_len = self.seq_len * self.idx_stride
+
+        # list of indices that can be sampled:
+        self.indices = [idx for idx in range(len(self.data[0]) - self.window_size)  # all possible idxs in the dataset
+                        if not (self.data[3][idx + self.window_size - 1] < 0  # that are not ending in an unlabeled zone
+                                or idx < self.past_signal_len)]  # and far enough from the beginning to build a sequence up to here
+        total_spindles = np.sum(self.data[3] > 0.2)
+        logging.debug(f"total number of spindles in this dataset : {total_spindles}")
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        assert 0 <= idx < len(self), f"Index out of range ({idx}/{len(self)})."
+        idx = self.indices[idx]
+        assert self.data[3][idx + self.window_size - 1] >= 0, f"Bad index: {idx}."
+
+        signal_seq = self.full_signal[idx - (self.past_signal_len - self.idx_stride):idx + self.window_size].unfold(0, self.window_size, self.idx_stride)
+        envelope_seq = self.full_envelope[idx - (self.past_signal_len - self.idx_stride):idx + self.window_size].unfold(0, self.window_size, self.idx_stride)
+
+        ratio_pf = torch.tensor(self.data[2][idx + self.window_size - 1], dtype=torch.float)
+        label = torch.tensor(self.data[3][idx + self.window_size - 1], dtype=torch.float)
+
+        return signal_seq, label
+
+    def is_spindle(self, idx):
+        assert 0 <= idx <= len(self), f"Index out of range ({idx}/{len(self)})."
+        idx = self.indices[idx]
+        return True if (self.data[3][idx + self.window_size - 1] > 0.2) else False
+
+
 class ValidationSampler(Sampler):
     """
     network_stride (int >= 1, default: 1): divides the size of the dataset (and of the batch) by striding further than 1
@@ -306,8 +356,7 @@ def get_dataloaders(config, dataset_path):
         sampler=val_sampler,
         num_workers=0,
         pin_memory=True,
-        shuffle=False,
-        drop_last=True)
+        shuffle=False)
 
     test_dl = DataLoader(
         test_ds, 

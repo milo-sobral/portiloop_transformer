@@ -112,7 +112,8 @@ class TransformiloopFinetune(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(config['d_model'], config['hidden_mlp'], device=config['device']),
             nn.ReLU(),
-            nn.Linear(config['hidden_mlp'], config['classes'] if config['classes'] > 2 else 1, device=config['device'])
+            nn.Linear(config['hidden_mlp'], config['classes'] if config['classes'] > 2 else 1, device=config['device']),
+            nn.Sigmoid() if config['classes'] <= 2 else nn.Identity()
         )
     
     def forward(self, x, history):
