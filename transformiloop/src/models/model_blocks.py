@@ -594,54 +594,7 @@ def get_cnn_embedder(config):
     test = torch.rand(config['batch_size'], config['seq_len'], config['window_size'])
     seq_len = cnn_embedder(test).size(1)
     return cnn_embedder, seq_len
-
-
-class GRUClassifier(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.cnn_layers = build_cnn_layers(config)
-            # Add the GRU LSTM to the sequence to generate the final model
-        self.gru = nn.GRU(
-            input_size=config['cnn_linear_size'] * config['cnn_channels'],
-            hidden_size=config['gru_hidden_size'],
-            num_layers=config['gru_num_layers'],
-            dropout=config['dropout'],
-            batch_first=True)
-        
-        # Add the linear layer to the sequence to generate the final model
-        self.classifier = nn.Linear(config['gru_hidden_size'], config['classes'] if config['classes'] > 2 else 1)
-        self.classes = config['classes']
-
-    def forward(self, x, h):
-        """
-        x -> (batch_size, seq_len, window_size)
-        """
-        (batch_size, seq_len, features) = x.size()
-
-        # Reshape to have only one channel
-        x = x.view(-1, 1, features) # x -> (batch_size*seq_len, 1, window_size)
-
-        # Pass the input through the CNN layers
-        x = self.cnn_layers(x) # x -> (batch_size*seq_len, nb_channels, cnn_linear_size) 
-        
-        # Flatten the channels with the features
-        x = torch.flatten(x, start_dim=1) # x -> (batch_size*seq_len, cnn_linear_size * nb_channels)
-
-        # Reshape to have the batch size and sequence length
-        x = x.view(batch_size, seq_len, -1) # x -> (batch_size, seq_len, cnn_linear_size)
-
-        # Pass the output of the CNN layers through the GRU
-        x, h = self.gru(x, h)
-
-        # Pass the output of the GRU through the classifier
-        x = self.classifier(x[:, -1, :])
-
-        # Pass through a sigmoid 
-        if self.classes <= 2:
-            x = torch.sigmoid(x)
-
-        return x, h
-
+    
 
 def build_cnn_layers(config):
     # Checking if verification of CNN layers' dimensions has been previously done

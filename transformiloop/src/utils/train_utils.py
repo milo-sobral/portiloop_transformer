@@ -198,8 +198,8 @@ def finetune_epoch(dataloader, config, device, classifier, classifier_optim, sch
         elif config['classes'] == 5:
             target_names = SleepStageDataset.get_labels()[:-1]
         else:
-            # target_names = ["No Spindle", "Spindle"]
-            target_names = ["Isolated", "First"]
+            target_names = ["No Spindle", "Spindle"]
+            # target_names = ["Isolated", "First"]
         metrics = classification_report(
             targets, 
             predictions, 
@@ -273,8 +273,8 @@ def finetune_test_epoch_lstm(dataloader, config, classifier, device, wandb_run, 
         elif config['classes'] == 5:
             target_names = SleepStageDataset.get_labels()[:-1]
         else:
-            # target_names = ["No Spindle", "Spindle"]
-            target_names = ["Isolated", "First"]
+            target_names = ["No Spindle", "Spindle"]
+            # target_names = ["Isolated", "First"]
         metrics = classification_report(
             targets, 
             predictions, 
@@ -345,8 +345,8 @@ def finetune_test_epoch(dataloader, config, classifier, device, wandb_run, epoch
         elif config['classes'] == 5:
             target_names = SleepStageDataset.get_labels()[:-1]
         else:
-             # target_names = ["No Spindle", "Spindle"]
-            target_names = ["Isolated", "First"]
+             target_names = ["No Spindle", "Spindle"]
+            # target_names = ["Isolated", "First"]
         metrics = classification_report(
             targets, 
             predictions, 

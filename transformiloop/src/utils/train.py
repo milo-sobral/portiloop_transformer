@@ -19,8 +19,8 @@ from transformiloop.src.data.pretraining import PretrainingDataset
 from transformiloop.src.data.sleep_stage import get_dataloaders_sleep_stage
 from transformiloop.src.data.spindle_detection import get_dataloaders
 from transformiloop.src.data.spindle_trains import get_dataloaders_spindle_trains
-from transformiloop.src.models.model_blocks import GRUClassifier
-from transformiloop.src.models.transformers import TransformiloopFinetune, TransformiloopPretrain
+from transformiloop.src.models.lstm import PortiloopNetwork, get_final_model_config_dict
+from transformiloop.src.models.transformers import TransformiloopFinetune, TransformiloopPretrain, GRUClassifier
 from transformiloop.src.utils.configs import fill_config, initialize_config, validate_config
 
 from transformiloop.src.utils.train_utils import (WandBLogger, finetune_epoch,
@@ -232,7 +232,11 @@ def finetune(wandb_group, wandb_project, wandb_exp_id, log_wandb=True, restore=F
         if model_type == "transformer":
             model = TransformiloopFinetune(config)
         elif model_type == "lstm":
-            model = GRUClassifier(config)
+            c_model = get_final_model_config_dict()
+            model = PortiloopNetwork(c_model)
+            # model = GRUClassifier(config)
+
+        # Restore the model if needed
         if restore:
             model_state_dict = model_dict['model']
             model_state_dict = {k: v for k, v in model_state_dict.items() if "transformer.positional_encoder.pos_encoder.pe" != k}

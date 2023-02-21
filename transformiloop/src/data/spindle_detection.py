@@ -22,9 +22,9 @@ def get_subject_list(config, dataset_path):
     p2_subject = pd.read_csv(os.path.join(dataset_path, 'subject_sequence_p2_big.txt'), header=None, delim_whitespace=True).to_numpy()
 
     # Get splits for train, validation and test
-    train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.9, random_state=None)
+    train_subject_p1, validation_subject_p1 = train_test_split(p1_subject, train_size=0.8, random_state=None)
     test_subject_p1, validation_subject_p1 = train_test_split(validation_subject_p1, train_size=0.5, random_state=None)
-    train_subject_p2, validation_subject_p2 = train_test_split(p2_subject, train_size=0.9, random_state=None)
+    train_subject_p2, validation_subject_p2 = train_test_split(p2_subject, train_size=0.8, random_state=None)
     test_subject_p2, validation_subject_p2 = train_test_split(validation_subject_p2, train_size=0.5, random_state=None)
 
     # Get subject list depending on split
@@ -278,7 +278,7 @@ class ValidationSampler(Sampler):
         self.len_segment = 115 * 250  # 115 seconds x 250 Hz
 
     def __iter__(self):
-        # seed()
+        random.seed()
         batches_per_segment = self.len_segment // self.seq_stride  # len sequence = 115 s + add the 15 first s?
         cursor_segment = 0
         while cursor_segment < batches_per_segment:
